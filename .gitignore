@@ -1,0 +1,15 @@
+node_modules
+.pnpm-store
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+apps/web/.next
+apps/web/node_modules
+apps/api/node_modules
+packages/shared/node_modules
+apps/api/dist
+packages/shared/dist
+coverage
+.logs
