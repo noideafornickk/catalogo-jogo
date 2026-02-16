@@ -26,11 +26,12 @@ export function ReviewCard({
   onDelete
 }: ReviewCardProps) {
   const shouldShowGameCover = Boolean(showUser && showGameCover);
+  const isWideMobileReviewCard = shouldShowGameCover && gameCoverSize === "md";
   const shouldShowDescriptionPreview = Boolean(
     showUser && showDescriptionPreview && review.game.descriptionPreview
   );
   const coverClassName =
-  gameCoverSize === "md"
+    gameCoverSize === "md"
       ? "relative h-20 w-32 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-100 sm:h-24 sm:w-40"
       : "relative h-12 w-9 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-100";
   const coverSizes = gameCoverSize === "md" ? "(max-width: 640px) 128px, 160px" : "36px";
@@ -58,11 +59,17 @@ export function ReviewCard({
 
       {showUser ? (
         <div
-          className={`flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 ${
-            shouldShowGameCover ? "sm:justify-between" : "justify-start"
+          className={`rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 ${
+            isWideMobileReviewCard
+              ? "flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:justify-between"
+              : `flex flex-wrap items-center gap-3 ${shouldShowGameCover ? "sm:justify-between" : "justify-start"}`
           }`}
         >
-          <div className="flex min-w-0 items-center gap-2 text-sm text-slate-700">
+          <div
+            className={`flex min-w-0 items-center gap-2 text-sm text-slate-700 ${
+              isWideMobileReviewCard ? "w-full justify-center sm:w-auto sm:justify-start" : ""
+            }`}
+          >
             {review.user.isPrivate ? (
               <div className="flex min-w-0 items-center gap-2">
                 {review.user.avatarUrl ? (
@@ -100,7 +107,7 @@ export function ReviewCard({
           {shouldShowGameCover ? (
             <Link
               href={`/games/${review.game.rawgId}`}
-              className={`${coverClassName} ml-auto`}
+              className={`${coverClassName} ${isWideMobileReviewCard ? "mx-auto sm:ml-auto" : "ml-auto"}`}
             >
               {review.game.coverUrl ? (
                 <Image
@@ -123,8 +130,10 @@ export function ReviewCard({
           href={`/games/${review.game.rawgId}`}
           className="block rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 hover:bg-slate-100"
         >
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Descrição oficial</p>
-          <p className="mt-1 text-preview-clamp-two text-fade-last-line text-sm leading-6 text-slate-700">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Descricao oficial
+          </p>
+          <p className="mt-1 break-words text-preview-clamp-two text-fade-last-line text-sm leading-6 text-slate-700">
             {review.game.descriptionPreview}
           </p>
         </Link>
@@ -139,7 +148,7 @@ export function ReviewCard({
               : "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
           }`}
         >
-          {review.recommend ? "Recomenda" : "Não recomenda"}
+          {review.recommend ? "Recomenda" : "Nao recomenda"}
         </span>
 
         <ReviewLikeButton
@@ -150,7 +159,7 @@ export function ReviewCard({
         />
       </div>
 
-      {review.body ? <p className="text-sm text-slate-700">{review.body}</p> : null}
+      {review.body ? <p className="break-words text-sm text-slate-700">{review.body}</p> : null}
 
       {onEdit || onDelete ? (
         <div className="flex gap-2">

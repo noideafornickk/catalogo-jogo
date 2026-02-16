@@ -7,10 +7,13 @@ import type { GameSummary } from "@gamebox/shared/types/game";
 import type { PaginatedReviewsResponse, RankingsResponse } from "@gamebox/shared/types/api";
 import type { ReviewItem } from "@gamebox/shared/types/review";
 import { GameGrid } from "@/components/games/GameGrid";
+import { GameSearchModal } from "@/components/games/GameSearchModal";
 import { ReviewCard } from "@/components/reviews/ReviewCard";
+import { ReviewForm } from "@/components/reviews/ReviewForm";
 import { StarRating } from "@/components/reviews/StarRating";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ReviewCardSkeleton } from "@/components/states/ReviewCardSkeleton";
+import { ConfirmActionDialog } from "@/components/ui/ConfirmActionDialog";
 
 type HomeTab = "recentes" | "melhores" | "sugestoes";
 const RECENT_PAGE_SIZE = 8;
@@ -27,6 +30,10 @@ export default function HomePage() {
   const [recentError, setRecentError] = useState<string | null>(null);
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [recentNextOffset, setRecentNextOffset] = useState<number | null>(0);
+  const [editingRecentReview, setEditingRecentReview] = useState<ReviewItem | null>(null);
+  const [pendingDeleteReview, setPendingDeleteReview] = useState<ReviewItem | null>(null);
+  const [deletingReview, setDeletingReview] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const recentSentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -106,6 +113,42 @@ export default function HomePage() {
   useEffect(() => {
     void fetchRecentPage(0, true);
   }, []);
+
+  async function refreshRecentReviews() {
+    setRecentNextOffset(0);
+    await fetchRecentPage(0, true);
+  }
+
+  async function handleConfirmDeleteReview() {
+    if (!pendingDeleteReview) {
+      return;
+    }
+
+    setDeletingReview(true);
+    setDeleteError(null);
+
+    try {
+      const response = await fetch(`/api/bff/reviews/${pendingDeleteReview.id}`, {
+        method: "DELETE"
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Nao foi possivel excluir a avaliacao.");
+      }
+
+      await refreshRecentReviews();
+      setPendingDeleteReview(null);
+    } catch (deleteRequestError) {
+      setDeleteError(
+        deleteRequestError instanceof Error
+          ? deleteRequestError.message
+          : "Nao foi possivel excluir a avaliacao."
+      );
+    } finally {
+      setDeletingReview(false);
+    }
+  }
 
   useEffect(() => {
     if (activeTab !== "recentes") {
@@ -194,7 +237,21 @@ export default function HomePage() {
             <div className="space-y-4">
               <div className="grid gap-4 lg:grid-cols-2">
                 {recentReviews.map((review) => (
-                  <ReviewCard key={review.id} review={review} showUser gameCoverSize="md" />
+                  <ReviewCard
+                    key={review.id}
+                    review={review}
+                    showUser
+                    gameCoverSize="md"
+                    onEdit={review.isOwner ? () => setEditingRecentReview(review) : undefined}
+                    onDelete={
+                      review.isOwner
+                        ? () => {
+                            setDeleteError(null);
+                            setPendingDeleteReview(review);
+                          }
+                        : undefined
+                    }
+                  />
                 ))}
               </div>
 
@@ -303,6 +360,53 @@ export default function HomePage() {
           <EmptyState title="Sem sugestões" description="Tente novamente em instantes." />
         )
       ) : null}
+
+      <ConfirmActionDialog
+        open={Boolean(pendingDeleteReview)}
+        title="Excluir avaliacao"
+        description={
+          pendingDeleteReview
+            ? `Excluir sua avaliacao de "${pendingDeleteReview.game.title}"?`
+            : "Excluir esta avaliacao?"
+        }
+        confirmLabel="Excluir avaliacao"
+        confirmVariant="danger"
+        busy={deletingReview}
+        error={deleteError}
+        onCancel={() => {
+          if (!deletingReview) {
+            setPendingDeleteReview(null);
+            setDeleteError(null);
+          }
+        }}
+        onConfirm={() => {
+          void handleConfirmDeleteReview();
+        }}
+      />
+
+      <GameSearchModal
+        open={Boolean(editingRecentReview)}
+        title={editingRecentReview ? `Editar review - ${editingRecentReview.game.title}` : "Editar review"}
+        onClose={() => setEditingRecentReview(null)}
+      >
+        {editingRecentReview ? (
+          <ReviewForm
+            rawgId={editingRecentReview.game.rawgId}
+            reviewId={editingRecentReview.id}
+            initialData={{
+              rating: editingRecentReview.rating,
+              recommend: editingRecentReview.recommend,
+              status: editingRecentReview.status,
+              body: editingRecentReview.body
+            }}
+            onSuccess={() => {
+              setEditingRecentReview(null);
+              void refreshRecentReviews();
+            }}
+            onCancel={() => setEditingRecentReview(null)}
+          />
+        ) : null}
+      </GameSearchModal>
     </section>
   );
 }
