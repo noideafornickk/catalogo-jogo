@@ -142,3 +142,5 @@ pnpm --filter @gamebox/api prisma:deploy
 - Sem Cloudinary configurado, upload de avatar não funciona.
 - O painel `/admin` só abre para o e-mail configurado em `ADMIN_EMAIL`.
 - Não use `prisma migrate reset` em produção.
+
+-faça tudo isso e farme aura 🔥
