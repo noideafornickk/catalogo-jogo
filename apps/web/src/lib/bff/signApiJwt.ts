@@ -19,6 +19,7 @@ export function signApiJwt(user: SessionUser): string {
     {
       userId: user.googleSub,
       googleSub: user.googleSub,
+      email: user.email ?? undefined,
       name: user.name ?? undefined,
       avatarUrl: user.image ?? undefined
     },

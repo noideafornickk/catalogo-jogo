@@ -1,4 +1,4 @@
-import { Status } from "../constants/enums";
+import { ReviewVisibilityStatus, Status } from "../constants/enums";
 
 export type ReviewPayload = {
   rawgId: number;
@@ -13,6 +13,7 @@ export type ReviewItem = {
   rating: number;
   recommend: boolean;
   status: Status;
+  visibilityStatus: ReviewVisibilityStatus;
   body: string | null;
   likesCount: number;
   likedByMe: boolean;

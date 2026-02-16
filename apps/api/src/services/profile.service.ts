@@ -1,10 +1,17 @@
-import { Status } from "@prisma/client";
+import {
+  ReviewVisibilityStatus,
+  Status,
+  SuspensionAppealStatus
+} from "@prisma/client";
 import { avatarApplyValidator } from "@gamebox/shared/validators/avatar";
 import type { ProfileCounts } from "@gamebox/shared/types/api";
+import type { SuspensionAppealCreateResponse } from "@gamebox/shared/types/api";
+import { createSuspensionAppealValidator } from "@gamebox/shared/validators/moderation";
 import { profileValidator } from "@gamebox/shared/validators/profile";
 import { prisma } from "../db/prisma";
 import { AppError } from "../middlewares/errorHandler";
 import { getReviewsByUser } from "./reviews.service";
+import { isAdminEmail } from "../utils/admin";
 import {
   buildAvatarUrl,
   destroyAvatarAsset,
@@ -17,9 +24,22 @@ import {
 
 export type JwtIdentity = {
   googleSub: string;
+  email?: string;
   name?: string;
   avatarUrl?: string;
 };
+
+function toIsoOrNull(value: Date | null): string | null {
+  return value ? value.toISOString() : null;
+}
+
+function isFutureDate(value: Date | null): boolean {
+  if (!value) {
+    return false;
+  }
+
+  return value.getTime() > Date.now();
+}
 
 function parseAvatarCrop(value: string | null): AvatarCrop | null {
   if (!value) {
@@ -64,7 +84,7 @@ export async function ensureUserWithProfile(identity: JwtIdentity) {
   return { user, profile };
 }
 
-export async function getMyProfile(userId: string) {
+export async function getMyProfile(userId: string, requesterEmail?: string | null) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: { profile: true }
@@ -84,11 +104,18 @@ export async function getMyProfile(userId: string) {
     avatarCrop: parseAvatarCrop(user.avatarCrop ?? null),
     bio: user.profile?.bio ?? null,
     isPrivate: user.profile?.isPrivate ?? false,
+    isAdmin: isAdminEmail(requesterEmail),
+    suspendedUntil: toIsoOrNull(user.suspendedUntil),
+    isSuspended: isFutureDate(user.suspendedUntil),
     counts
   };
 }
 
-export async function updateMyProfile(userId: string, input: unknown) {
+export async function updateMyProfile(
+  userId: string,
+  input: unknown,
+  requesterEmail?: string | null
+) {
   const parsed = profileValidator.parse(input);
 
   await prisma.$transaction([
@@ -112,7 +139,7 @@ export async function updateMyProfile(userId: string, input: unknown) {
     })
   ]);
 
-  return getMyProfile(userId);
+  return getMyProfile(userId, requesterEmail);
 }
 
 export async function uploadMyAvatarOriginal(userId: string, file: AvatarUploadFile) {
@@ -132,7 +159,7 @@ export async function uploadMyAvatarOriginal(userId: string, file: AvatarUploadF
   };
 }
 
-export async function updateMyAvatar(userId: string, input: unknown) {
+export async function updateMyAvatar(userId: string, input: unknown, requesterEmail?: string | null) {
   const parsed = avatarApplyValidator.parse(input);
   const crop = normalizeAvatarCrop(parsed.crop);
 
@@ -167,7 +194,7 @@ export async function updateMyAvatar(userId: string, input: unknown) {
     await destroyAvatarAsset(existingUser.avatarPublicId);
   }
 
-  return getMyProfile(userId);
+  return getMyProfile(userId, requesterEmail);
 }
 
 async function getProfileCounts(userId: string): Promise<ProfileCounts> {
@@ -179,15 +206,42 @@ async function getProfileCounts(userId: string): Promise<ProfileCounts> {
     droppedCount,
     totalLikesReceived
   ] = await Promise.all([
-    prisma.review.count({ where: { userId } }),
-    prisma.review.count({ where: { userId, status: Status.FINISHED } }),
-    prisma.review.count({ where: { userId, status: Status.PLAYING } }),
-    prisma.review.count({ where: { userId, status: Status.WISHLIST } }),
-    prisma.review.count({ where: { userId, status: Status.DROPPED } }),
+    prisma.review.count({
+      where: { userId, visibilityStatus: ReviewVisibilityStatus.ACTIVE }
+    }),
+    prisma.review.count({
+      where: {
+        userId,
+        status: Status.FINISHED,
+        visibilityStatus: ReviewVisibilityStatus.ACTIVE
+      }
+    }),
+    prisma.review.count({
+      where: {
+        userId,
+        status: Status.PLAYING,
+        visibilityStatus: ReviewVisibilityStatus.ACTIVE
+      }
+    }),
+    prisma.review.count({
+      where: {
+        userId,
+        status: Status.WISHLIST,
+        visibilityStatus: ReviewVisibilityStatus.ACTIVE
+      }
+    }),
+    prisma.review.count({
+      where: {
+        userId,
+        status: Status.DROPPED,
+        visibilityStatus: ReviewVisibilityStatus.ACTIVE
+      }
+    }),
     prisma.reviewLike.count({
       where: {
         review: {
-          userId
+          userId,
+          visibilityStatus: ReviewVisibilityStatus.ACTIVE
         }
       }
     })
@@ -238,5 +292,73 @@ export async function getPublicProfile(targetUserId: string, viewerUserId?: stri
     isPrivate,
     counts,
     reviews
+  };
+}
+
+export async function createMySuspensionAppeal(
+  userId: string,
+  input: unknown
+): Promise<SuspensionAppealCreateResponse> {
+  const parsed = createSuspensionAppealValidator.parse(input ?? {});
+
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId
+    },
+    select: {
+      suspendedUntil: true
+    }
+  });
+
+  if (!user) {
+    throw new AppError(404, "User not found");
+  }
+
+  const isSuspended = Boolean(
+    user.suspendedUntil && user.suspendedUntil.getTime() > Date.now()
+  );
+  if (!isSuspended) {
+    throw new AppError(400, "account_not_suspended");
+  }
+
+  const existingOpenAppeal = await prisma.suspensionAppeal.findFirst({
+    where: {
+      userId,
+      status: SuspensionAppealStatus.OPEN
+    },
+    orderBy: {
+      createdAt: "desc"
+    },
+    select: {
+      id: true,
+      status: true
+    }
+  });
+
+  if (existingOpenAppeal) {
+    return {
+      ok: true,
+      appealId: existingOpenAppeal.id,
+      status: existingOpenAppeal.status as SuspensionAppealCreateResponse["status"]
+    };
+  }
+
+  const created = await prisma.suspensionAppeal.create({
+    data: {
+      userId,
+      message:
+        parsed.message ??
+        "Solicito revisão da suspensão. Acredito que houve um engano."
+    },
+    select: {
+      id: true,
+      status: true
+    }
+  });
+
+  return {
+    ok: true,
+    appealId: created.id,
+    status: created.status as SuspensionAppealCreateResponse["status"]
   };
 }

@@ -2,18 +2,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Status } from "@gamebox/shared/constants/enums";
 import type { PublicProfileResponse } from "@gamebox/shared/types/api";
+import type { ReviewItem } from "@gamebox/shared/types/review";
 import { CatalogReviewCard } from "@/components/reviews/CatalogReviewCard";
+import { ReportReviewDialog } from "@/components/reviews/ReportReviewDialog";
 import { EmptyState } from "@/components/states/EmptyState";
 import { PublicProfilePageSkeleton } from "@/components/states/ProfilePageSkeleton";
 
 export default function PublicProfilePage() {
+  const { status: sessionStatus } = useSession();
   const params = useParams<{ userId: string }>();
   const userId = params.userId;
   const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reportingReview, setReportingReview] = useState<ReviewItem | null>(null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -126,7 +131,15 @@ export default function PublicProfilePage() {
                   {statusReviews.length > 0 ? (
                     <div className="space-y-3">
                       {statusReviews.map((review) => (
-                        <CatalogReviewCard key={review.id} review={review} />
+                        <CatalogReviewCard
+                          key={review.id}
+                          review={review}
+                          onReport={
+                            sessionStatus === "authenticated" && !review.isOwner
+                              ? () => setReportingReview(review)
+                              : undefined
+                          }
+                        />
                       ))}
                     </div>
                   ) : (
@@ -138,6 +151,13 @@ export default function PublicProfilePage() {
           )}
         </>
       ) : null}
+
+      <ReportReviewDialog
+        open={Boolean(reportingReview)}
+        reviewId={reportingReview?.id ?? null}
+        gameTitle={reportingReview?.game.title}
+        onClose={() => setReportingReview(null)}
+      />
     </section>
   );
 }

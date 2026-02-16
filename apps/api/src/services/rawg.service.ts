@@ -1,4 +1,5 @@
-﻿import type { GameSummary, RawgGameDetails } from "@gamebox/shared/types/game";
+import type { GameSummary, RawgGameDetails } from "@gamebox/shared/types/game";
+import { ReviewVisibilityStatus } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { memoryCache } from "../cache/memoryCache";
 import { AppError } from "../middlewares/errorHandler";
@@ -140,11 +141,12 @@ async function enrichWithReviewStats(games: GameSummary[]): Promise<GameSummary[
   const gameIds = dbGames.map((game) => game.id);
   const reviewStats =
     gameIds.length > 0
-      ? await prisma.review.groupBy({
-          by: ["gameId"],
-          where: {
-            gameId: { in: gameIds }
-          },
+        ? await prisma.review.groupBy({
+            by: ["gameId"],
+            where: {
+              visibilityStatus: ReviewVisibilityStatus.ACTIVE,
+              gameId: { in: gameIds }
+            },
           _avg: {
             rating: true
           },

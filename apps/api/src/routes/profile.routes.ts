@@ -1,7 +1,9 @@
 import { Router } from "express";
 import multer from "multer";
 import { authJwt, optionalAuthJwt } from "../middlewares/authJwt";
+import { ensureActiveUser } from "../middlewares/ensureActiveUser";
 import {
+  createMySuspensionAppealController,
   getMyProfileController,
   getPublicProfileController,
   uploadMyAvatarController,
@@ -18,7 +20,14 @@ const avatarUpload = multer({
 });
 
 profileRoutes.get("/me", authJwt, getMyProfileController);
-profileRoutes.put("/me", authJwt, updateMyProfileController);
-profileRoutes.post("/me/avatar/upload", authJwt, avatarUpload.single("avatar"), uploadMyAvatarController);
-profileRoutes.put("/me/avatar", authJwt, updateMyAvatarController);
+profileRoutes.put("/me", authJwt, ensureActiveUser, updateMyProfileController);
+profileRoutes.post("/me/suspension-appeal", authJwt, createMySuspensionAppealController);
+profileRoutes.post(
+  "/me/avatar/upload",
+  authJwt,
+  ensureActiveUser,
+  avatarUpload.single("avatar"),
+  uploadMyAvatarController
+);
+profileRoutes.put("/me/avatar", authJwt, ensureActiveUser, updateMyAvatarController);
 profileRoutes.get("/users/:userId", optionalAuthJwt, getPublicProfileController);

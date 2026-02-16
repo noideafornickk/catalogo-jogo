@@ -1,4 +1,5 @@
 import type { RankingItem, RankingRange } from "@gamebox/shared/types/api";
+import { ReviewVisibilityStatus } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { daysAgo, toIsoDate } from "../utils/dates";
 import { toDescriptionPreview } from "../utils/text";
@@ -11,6 +12,7 @@ export async function getRankings(range: RankingRange): Promise<RankingItem[]> {
   const grouped = await prisma.review.groupBy({
     by: ["gameId"],
     where: {
+      visibilityStatus: ReviewVisibilityStatus.ACTIVE,
       createdAt: {
         gte: fromDate
       }

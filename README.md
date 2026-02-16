@@ -54,6 +54,9 @@ Copy-Item .env.example apps/api/.env
   - `RAWG_API_KEY`
   - `API_JWT_SECRET`
   - `CORS_ORIGIN`
+  - `ADMIN_EMAIL` (email Google unico com acesso ao painel `/admin`)
+  - `MODERATION_STRIKE_LIMIT` (default recomendado: `3`)
+  - `MODERATION_SUSPENSION_DAYS` (default recomendado: `7`)
   - `CLOUDINARY_CLOUD_NAME` (opcional, para upload de avatar)
   - `CLOUDINARY_API_KEY` (opcional, para upload de avatar)
   - `CLOUDINARY_API_SECRET` (opcional, para upload de avatar)
@@ -93,6 +96,7 @@ pnpm build
 - Editar/excluir review propria
 - Perfil com edicao apenas de bio
 - Perfil com alteracao de avatar (Cloudinary) com crop 1:1, zoom e pan
+- Denúncia de review por usuários logados + painel admin em `/admin`
+- Moderacao por soft-hide de reviews (review oculta some dos feeds publicos)
+- Suspensão automática por moderação: ao acumular `MODERATION_STRIKE_LIMIT` reviews ocultas, a conta fica suspensa por `MODERATION_SUSPENSION_DAYS`
 - Atribuicao RAWG no footer em todas as paginas
-
--Projeto maneiro, aprendi umas pá de coisa, e envelheci 30 anos em 2 dias, ja posso aposentar?

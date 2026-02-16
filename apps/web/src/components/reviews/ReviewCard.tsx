@@ -14,6 +14,7 @@ type ReviewCardProps = {
   showDescriptionPreview?: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
+  onReport?: () => void;
 };
 
 export function ReviewCard({
@@ -23,7 +24,8 @@ export function ReviewCard({
   gameCoverSize = "sm",
   showDescriptionPreview = true,
   onEdit,
-  onDelete
+  onDelete,
+  onReport
 }: ReviewCardProps) {
   const shouldShowGameCover = Boolean(showUser && showGameCover);
   const shouldShowDescriptionPreview = Boolean(
@@ -152,8 +154,38 @@ export function ReviewCard({
 
       {review.body ? <p className="break-words text-sm text-slate-700">{review.body}</p> : null}
 
-      {onEdit || onDelete ? (
-        <div className="flex gap-2">
+      {onEdit || onDelete || onReport ? (
+        <div className="flex w-full items-center justify-end gap-2">
+          {onReport ? (
+            <button
+              type="button"
+              className="ml-auto inline-flex items-center gap-1 rounded-md border border-amber-200 px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50"
+              onClick={onReport}
+            >
+              <svg
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                aria-hidden="true"
+                className="h-3 w-3"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8.257 3.099c.765-1.36 2.72-1.36 3.485 0l6.518 11.591c.75 1.334-.213 2.99-1.742 2.99H3.48c-1.53 0-2.492-1.656-1.742-2.99L8.257 3.1Z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10 7.25v4.25"
+                />
+                <circle cx="10" cy="14.75" r="0.8" fill="currentColor" stroke="none" />
+              </svg>
+              Denunciar
+            </button>
+          ) : null}
+
           {onEdit ? (
             <button
               type="button"

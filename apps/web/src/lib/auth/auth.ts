@@ -38,11 +38,18 @@ export const authOptions: NextAuthOptions = {
         token.picture = user.image;
       }
 
+      if (user?.email && typeof token.email !== "string") {
+        token.email = user.email;
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        const mutableUser = session.user as typeof session.user & { googleSub?: string };
+        const mutableUser = session.user as typeof session.user & {
+          googleSub?: string;
+          email?: string | null;
+        };
         const extendedToken = token as typeof token & { googleSub?: string };
 
         mutableUser.googleSub = extendedToken.googleSub ?? token.sub ?? undefined;
@@ -53,6 +60,10 @@ export const authOptions: NextAuthOptions = {
 
         if (typeof token.picture === "string") {
           mutableUser.image = token.picture;
+        }
+
+        if (typeof token.email === "string") {
+          mutableUser.email = token.email;
         }
       }
 

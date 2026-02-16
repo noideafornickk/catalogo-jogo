@@ -3,6 +3,7 @@ import { authOptions } from "./auth";
 
 export type SessionUser = {
   googleSub: string;
+  email?: string | null;
   name?: string | null;
   image?: string | null;
 };
@@ -12,6 +13,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const user = session?.user as
     | {
         googleSub?: string;
+        email?: string | null;
         name?: string | null;
         image?: string | null;
       }
@@ -23,6 +25,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   return {
     googleSub: user.googleSub,
+    email: user.email,
     name: user.name,
     image: user.image
   };

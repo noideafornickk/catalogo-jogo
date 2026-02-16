@@ -3,6 +3,7 @@ import type { AuthenticatedRequest } from "../middlewares/authJwt";
 import { AppError } from "../middlewares/errorHandler";
 import {
   createOrUpdateReview,
+  createReviewReport,
   deleteReviewById,
   likeReviewById,
   getMyReviewsPage,
@@ -141,6 +142,24 @@ export async function deleteReviewController(
 
     await deleteReviewById(user.id, req.params.id);
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function reportReviewController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as AuthenticatedRequest).user;
+    if (!user) {
+      throw new AppError(401, "Unauthorized");
+    }
+
+    const report = await createReviewReport(user.id, req.params.id, req.body);
+    res.json(report);
   } catch (error) {
     next(error);
   }

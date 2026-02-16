@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import type { RawgGameDetails } from "@gamebox/shared/types/game";
 import type { ReviewItem } from "@gamebox/shared/types/review";
 import { ReviewCard } from "@/components/reviews/ReviewCard";
+import { ReportReviewDialog } from "@/components/reviews/ReportReviewDialog";
 import { EmptyState } from "@/components/states/EmptyState";
 import { GameSearchModal } from "@/components/games/GameSearchModal";
 import { ReviewForm } from "@/components/reviews/ReviewForm";
@@ -25,6 +26,7 @@ export default function GamePage() {
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [reviewsError, setReviewsError] = useState<string | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reportingReview, setReportingReview] = useState<ReviewItem | null>(null);
 
   const [gameDetails, setGameDetails] = useState<RawgGameDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(true);
@@ -224,6 +226,11 @@ export default function GamePage() {
                   showUser
                   showGameCover={false}
                   showDescriptionPreview={false}
+                  onReport={
+                    status === "authenticated" && !review.isOwner
+                      ? () => setReportingReview(review)
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -261,6 +268,13 @@ export default function GamePage() {
           onCancel={() => setShowReviewModal(false)}
         />
       </GameSearchModal>
+
+      <ReportReviewDialog
+        open={Boolean(reportingReview)}
+        reviewId={reportingReview?.id ?? null}
+        gameTitle={reportingReview?.game.title}
+        onClose={() => setReportingReview(null)}
+      />
     </section>
   );
 }

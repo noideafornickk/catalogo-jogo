@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import type { GameSummary } from "@gamebox/shared/types/game";
 import type { PaginatedReviewsResponse, RankingsResponse } from "@gamebox/shared/types/api";
 import type { ReviewItem } from "@gamebox/shared/types/review";
@@ -10,6 +11,7 @@ import { GameGrid } from "@/components/games/GameGrid";
 import { GameSearchModal } from "@/components/games/GameSearchModal";
 import { ReviewCard } from "@/components/reviews/ReviewCard";
 import { ReviewForm } from "@/components/reviews/ReviewForm";
+import { ReportReviewDialog } from "@/components/reviews/ReportReviewDialog";
 import { StarRating } from "@/components/reviews/StarRating";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ReviewCardSkeleton } from "@/components/states/ReviewCardSkeleton";
@@ -19,6 +21,7 @@ type HomeTab = "recentes" | "melhores" | "sugestoes";
 const RECENT_PAGE_SIZE = 8;
 
 export default function HomePage() {
+  const { status: sessionStatus } = useSession();
   const [activeTab, setActiveTab] = useState<HomeTab>("recentes");
   const [homeLoading, setHomeLoading] = useState(true);
   const [homeError, setHomeError] = useState<string | null>(null);
@@ -34,6 +37,7 @@ export default function HomePage() {
   const [pendingDeleteReview, setPendingDeleteReview] = useState<ReviewItem | null>(null);
   const [deletingReview, setDeletingReview] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [reportingReview, setReportingReview] = useState<ReviewItem | null>(null);
   const recentSentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -134,7 +138,7 @@ export default function HomePage() {
 
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "Nao foi possivel excluir a avaliacao.");
+        throw new Error(data?.error ?? "Não foi possível excluir a avaliação.");
       }
 
       await refreshRecentReviews();
@@ -143,7 +147,7 @@ export default function HomePage() {
       setDeleteError(
         deleteRequestError instanceof Error
           ? deleteRequestError.message
-          : "Nao foi possivel excluir a avaliacao."
+          : "Não foi possível excluir a avaliação."
       );
     } finally {
       setDeletingReview(false);
@@ -249,6 +253,11 @@ export default function HomePage() {
                             setDeleteError(null);
                             setPendingDeleteReview(review);
                           }
+                        : undefined
+                    }
+                    onReport={
+                      sessionStatus === "authenticated" && !review.isOwner
+                        ? () => setReportingReview(review)
                         : undefined
                     }
                   />
@@ -363,13 +372,13 @@ export default function HomePage() {
 
       <ConfirmActionDialog
         open={Boolean(pendingDeleteReview)}
-        title="Excluir avaliacao"
+        title="Excluir avaliação"
         description={
           pendingDeleteReview
-            ? `Excluir sua avaliacao de "${pendingDeleteReview.game.title}"?`
-            : "Excluir esta avaliacao?"
+            ? `Excluir sua avaliação de "${pendingDeleteReview.game.title}"?`
+            : "Excluir esta avaliação?"
         }
-        confirmLabel="Excluir avaliacao"
+        confirmLabel="Excluir avaliação"
         confirmVariant="danger"
         busy={deletingReview}
         error={deleteError}
@@ -407,6 +416,13 @@ export default function HomePage() {
           />
         ) : null}
       </GameSearchModal>
+
+      <ReportReviewDialog
+        open={Boolean(reportingReview)}
+        reviewId={reportingReview?.id ?? null}
+        gameTitle={reportingReview?.game.title}
+        onClose={() => setReportingReview(null)}
+      />
     </section>
   );
 }

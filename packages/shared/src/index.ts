@@ -3,6 +3,7 @@ export * from "./validators/review";
 export * from "./validators/search";
 export * from "./validators/profile";
 export * from "./validators/avatar";
+export * from "./validators/moderation";
 export * from "./types/game";
 export * from "./types/review";
 export * from "./types/api";

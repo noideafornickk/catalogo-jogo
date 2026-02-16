@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Cropper, { type Area } from "react-easy-crop";
 import { useSession } from "next-auth/react";
 import { ProfilePageSkeleton } from "@/components/states/ProfilePageSkeleton";
+import { buildSuspendedPath, getSuspendedUntilFromApiError } from "@/lib/utils/suspension";
 
 type AvatarCrop = {
   x: number;
@@ -36,6 +38,7 @@ type UploadAvatarResponse = {
 };
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { status } = useSession();
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [name, setName] = useState("");
@@ -70,7 +73,13 @@ export default function ProfilePage() {
     try {
       const response = await fetch("/api/bff/profile");
       if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string; suspendedUntil?: string | null }
+          | null;
+        if (data?.error === "account_suspended") {
+          router.replace(buildSuspendedPath(getSuspendedUntilFromApiError(data)));
+          return;
+        }
         throw new Error(data?.error ?? "Falha ao carregar perfil");
       }
 
@@ -112,7 +121,13 @@ export default function ProfilePage() {
       });
 
       if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string; suspendedUntil?: string | null }
+          | null;
+        if (data?.error === "account_suspended") {
+          router.replace(buildSuspendedPath(getSuspendedUntilFromApiError(data)));
+          return;
+        }
         throw new Error(data?.error ?? "Falha ao atualizar perfil");
       }
 
@@ -190,7 +205,13 @@ export default function ProfilePage() {
       });
 
       if (!uploadResponse.ok) {
-        const uploadData = (await uploadResponse.json().catch(() => null)) as { error?: string } | null;
+        const uploadData = (await uploadResponse.json().catch(() => null)) as
+          | { error?: string; suspendedUntil?: string | null }
+          | null;
+        if (uploadData?.error === "account_suspended") {
+          router.replace(buildSuspendedPath(getSuspendedUntilFromApiError(uploadData)));
+          return;
+        }
         throw new Error(uploadData?.error ?? "Falha ao enviar avatar original");
       }
 
@@ -218,7 +239,13 @@ export default function ProfilePage() {
       });
 
       if (!applyResponse.ok) {
-        const applyData = (await applyResponse.json().catch(() => null)) as { error?: string } | null;
+        const applyData = (await applyResponse.json().catch(() => null)) as
+          | { error?: string; suspendedUntil?: string | null }
+          | null;
+        if (applyData?.error === "account_suspended") {
+          router.replace(buildSuspendedPath(getSuspendedUntilFromApiError(applyData)));
+          return;
+        }
         throw new Error(applyData?.error ?? "Falha ao aplicar recorte do avatar");
       }
 

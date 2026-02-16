@@ -7,8 +7,10 @@ import { ensureUserWithProfile } from "../services/profile.service";
 export type AuthenticatedUser = {
   id: string;
   googleSub: string;
+  email: string | null;
   name: string;
   avatarUrl: string;
+  suspendedUntil: Date | null;
 };
 
 export type AuthenticatedRequest = Request & {
@@ -18,6 +20,7 @@ export type AuthenticatedRequest = Request & {
 type ApiJwtPayload = {
   userId: string;
   googleSub: string;
+  email?: string;
   name?: string;
   avatarUrl?: string;
 };
@@ -31,6 +34,7 @@ async function resolveAuthenticatedUserFromToken(token: string): Promise<Authent
 
   const { user } = await ensureUserWithProfile({
     googleSub: decoded.googleSub,
+    email: decoded.email,
     name: decoded.name,
     avatarUrl: decoded.avatarUrl
   });
@@ -38,9 +42,19 @@ async function resolveAuthenticatedUserFromToken(token: string): Promise<Authent
   return {
     id: user.id,
     googleSub: user.googleSub,
+    email: decoded.email ?? null,
     name: user.name,
-    avatarUrl: user.avatarUrl
+    avatarUrl: user.avatarUrl,
+    suspendedUntil: user.suspendedUntil
   };
+}
+
+export function isAccountSuspended(user: AuthenticatedUser): boolean {
+  if (!user.suspendedUntil) {
+    return false;
+  }
+
+  return user.suspendedUntil.getTime() > Date.now();
 }
 
 function extractBearerToken(req: Request): string | null {

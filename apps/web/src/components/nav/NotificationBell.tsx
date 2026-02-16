@@ -178,10 +178,23 @@ export function NotificationBell() {
                     : "border-red-100 bg-red-50 text-slate-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-slate-100"
                 }`}
               >
-                <p className="break-words">
-                  <span className="font-medium">{item.actor.name}</span> curtiu sua review em{" "}
-                  <span className="font-medium">{item.review.game.title}</span>.
-                </p>
+                {item.type === "REPORT_RESOLVED" ? (
+                  <p className="break-words">
+                    Agradecemos a denúncia. Obrigado por manter a comunidade limpa e segura.
+                    Interceptamos a review em{" "}
+                    <span className="font-medium">{item.review.game.title}</span> com sucesso.
+                  </p>
+                ) : item.type === "REVIEW_MODERATED" ? (
+                  <p className="break-words">
+                    Sua review em <span className="font-medium">{item.review.game.title}</span>{" "}
+                    foi moderada e ocultada após análise da denúncia.
+                  </p>
+                ) : (
+                  <p className="break-words">
+                    <span className="font-medium">{item.actor.name}</span> curtiu sua review em{" "}
+                    <span className="font-medium">{item.review.game.title}</span>.
+                  </p>
+                )}
               </Link>
             ))}
           </div>

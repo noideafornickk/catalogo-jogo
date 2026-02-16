@@ -1,0 +1,13 @@
+DO $$
+BEGIN
+  ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'REPORT_RESOLVED';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'REVIEW_MODERATED';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;

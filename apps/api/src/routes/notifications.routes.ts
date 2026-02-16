@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authJwt } from "../middlewares/authJwt";
+import { ensureActiveUser } from "../middlewares/ensureActiveUser";
 import {
   getMyNotificationsController,
   markAllNotificationsAsReadController,
@@ -8,6 +9,6 @@ import {
 
 export const notificationsRoutes = Router();
 
-notificationsRoutes.get("/me", authJwt, getMyNotificationsController);
-notificationsRoutes.patch("/:id/read", authJwt, markNotificationAsReadController);
-notificationsRoutes.patch("/read-all", authJwt, markAllNotificationsAsReadController);
+notificationsRoutes.get("/me", authJwt, ensureActiveUser, getMyNotificationsController);
+notificationsRoutes.patch("/:id/read", authJwt, ensureActiveUser, markNotificationAsReadController);
+notificationsRoutes.patch("/read-all", authJwt, ensureActiveUser, markAllNotificationsAsReadController);

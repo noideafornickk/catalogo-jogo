@@ -16,6 +16,34 @@ enum Status {
 
 enum NotificationType {
   REVIEW_LIKED
+  REPORT_RESOLVED
+  REVIEW_MODERATED
+}
+
+enum ReviewVisibilityStatus {
+  ACTIVE
+  HIDDEN
+}
+
+enum ReportReason {
+  OFFENSIVE
+  HATE
+  SPAM
+  SEXUAL
+  PERSONAL_DATA
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum SuspensionAppealStatus {
+  OPEN
+  RESOLVED
+  REJECTED
 }
 
 model User {
@@ -25,11 +53,19 @@ model User {
   avatarUrl      String
   avatarPublicId String?
   avatarCrop     String?  @db.Text
+  suspendedUntil DateTime?
   createdAt      DateTime @default(now())
 
   profile               Profile?
   reviews               Review[]
+  hiddenReviews         Review[]       @relation("HiddenReviewsByAdmin")
+  reports               ReviewReport[] @relation("ReviewReportsByUser")
+  resolvedReports       ReviewReport[] @relation("ReviewReportsResolvedByUser")
+  suspensionAppeals     SuspensionAppeal[] @relation("SuspensionAppealsByUser")
+  resolvedSuspensionAppeals SuspensionAppeal[] @relation("SuspensionAppealsResolvedByUser")
   reviewLikes           ReviewLike[]
+  moderationStrikes     ModerationStrike[] @relation("ModerationStrikesByUser")
+  issuedModerationStrikes ModerationStrike[] @relation("ModerationStrikesIssuedByAdmin")
   sentNotifications     Notification[] @relation("NotificationActor")
   receivedNotifications Notification[] @relation("NotificationRecipient")
 }
@@ -55,24 +91,48 @@ model Game {
 }
 
 model Review {
-  id        String       @id @default(uuid())
-  userId    String
-  gameId    String
-  rating    Int
-  recommend Boolean
-  status    Status
-  body      String?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id               String                 @id @default(uuid())
+  userId           String
+  gameId           String
+  rating           Int
+  recommend        Boolean
+  status           Status
+  visibilityStatus ReviewVisibilityStatus @default(ACTIVE)
+  hiddenReason     String?
+  hiddenAt         DateTime?
+  hiddenByUserId   String?
+  body             String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   game          Game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  hiddenByUser  User?          @relation("HiddenReviewsByAdmin", fields: [hiddenByUserId], references: [id], onDelete: SetNull)
+  reports       ReviewReport[]
   likes         ReviewLike[]
+  moderationStrike ModerationStrike?
   notifications Notification[]
 
   @@unique([userId, gameId])
   @@index([gameId])
   @@index([createdAt])
+  @@index([visibilityStatus, createdAt])
+}
+
+model ModerationStrike {
+  id              String   @id @default(uuid())
+  userId          String
+  reviewId        String   @unique
+  issuedByUserId  String
+  createdAt       DateTime @default(now())
+  revokedAt       DateTime?
+
+  user         User   @relation("ModerationStrikesByUser", fields: [userId], references: [id], onDelete: Cascade)
+  review       Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  issuedByUser User   @relation("ModerationStrikesIssuedByAdmin", fields: [issuedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([issuedByUserId])
 }
 
 model ReviewLike {
@@ -105,4 +165,40 @@ model Notification {
   @@index([recipientUserId, createdAt])
   @@index([recipientUserId, readAt])
   @@index([reviewId])
+}
+
+model ReviewReport {
+  id               String       @id @default(cuid())
+  reviewId         String
+  reporterUserId   String
+  reason           ReportReason
+  details          String?
+  status           ReportStatus @default(OPEN)
+  createdAt        DateTime     @default(now())
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+
+  review         Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reporter       User   @relation("ReviewReportsByUser", fields: [reporterUserId], references: [id], onDelete: Cascade)
+  resolvedByUser User?  @relation("ReviewReportsResolvedByUser", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([reviewId, status])
+  @@unique([reviewId, reporterUserId, status])
+}
+
+model SuspensionAppeal {
+  id               String               @id @default(cuid())
+  userId           String
+  message          String?              @db.Text
+  status           SuspensionAppealStatus @default(OPEN)
+  createdAt        DateTime             @default(now())
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+
+  user           User  @relation("SuspensionAppealsByUser", fields: [userId], references: [id], onDelete: Cascade)
+  resolvedByUser User? @relation("SuspensionAppealsResolvedByUser", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId, status])
 }

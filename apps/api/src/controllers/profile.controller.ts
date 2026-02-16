@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/authJwt";
 import { AppError } from "../middlewares/errorHandler";
 import {
+  createMySuspensionAppeal,
   getMyProfile,
   getPublicProfile,
   uploadMyAvatarOriginal,
@@ -21,7 +22,7 @@ export async function getMyProfileController(
       throw new AppError(401, "Unauthorized");
     }
 
-    const profile = await getMyProfile(user.id);
+    const profile = await getMyProfile(user.id, user.email);
     res.json(profile);
   } catch (error) {
     next(error);
@@ -39,7 +40,7 @@ export async function updateMyProfileController(
       throw new AppError(401, "Unauthorized");
     }
 
-    const profile = await updateMyProfile(user.id, req.body);
+    const profile = await updateMyProfile(user.id, req.body, user.email);
     res.json(profile);
   } catch (error) {
     next(error);
@@ -57,7 +58,7 @@ export async function updateMyAvatarController(
       throw new AppError(401, "Unauthorized");
     }
 
-    const profile = await updateMyAvatar(user.id, req.body);
+    const profile = await updateMyAvatar(user.id, req.body, user.email);
     res.json(profile);
   } catch (error) {
     next(error);
@@ -102,6 +103,24 @@ export async function getPublicProfileController(
 
     const profile = await getPublicProfile(targetUserId, authUser?.id);
     res.json(profile);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function createMySuspensionAppealController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as AuthenticatedRequest).user;
+    if (!user) {
+      throw new AppError(401, "Unauthorized");
+    }
+
+    const result = await createMySuspensionAppeal(user.id, req.body);
+    res.json(result);
   } catch (error) {
     next(error);
   }

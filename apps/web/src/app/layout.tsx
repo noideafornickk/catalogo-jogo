@@ -3,6 +3,7 @@ import "./globals.css";
 import { Navbar } from "@/components/nav/Navbar";
 import { Footer } from "@/components/nav/Footer";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { SuspensionGuard } from "@/components/auth/SuspensionGuard";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <AuthProvider>
           <ThemeProvider>
+            <SuspensionGuard />
             <div className="flex min-h-screen flex-col">
               <Navbar />
               <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>

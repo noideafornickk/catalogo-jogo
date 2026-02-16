@@ -1,4 +1,11 @@
-import { NotificationType, type Prisma } from "@prisma/client";
+import {
+  NotificationType,
+  ReportStatus,
+  ReviewVisibilityStatus,
+  type Prisma
+} from "@prisma/client";
+import { reviewReportValidator } from "@gamebox/shared/validators/moderation";
+import type { ReviewReportCreateResponse } from "@gamebox/shared/types/api";
 import { reviewUpdateValidator, reviewValidator } from "@gamebox/shared/validators/review";
 import type { ReviewItem } from "@gamebox/shared/types/review";
 import type { PaginatedReviewsResponse } from "@gamebox/shared/types/api";
@@ -32,7 +39,11 @@ const reviewInclude = {
       descriptionText: true,
       _count: {
         select: {
-          reviews: true
+          reviews: {
+            where: {
+              visibilityStatus: ReviewVisibilityStatus.ACTIVE
+            }
+          }
         }
       }
     }
@@ -90,6 +101,7 @@ function toReviewItem(
     rating: review.rating,
     recommend: review.recommend,
     status: review.status,
+    visibilityStatus: review.visibilityStatus,
     body: review.body,
     likesCount: review._count.likes,
     likedByMe,
@@ -185,6 +197,9 @@ async function toPaginatedReviewResponse(
 
 export async function getRecentReviews(limit: number, viewerUserId?: string): Promise<ReviewItem[]> {
   const rows = await prisma.review.findMany({
+    where: {
+      visibilityStatus: ReviewVisibilityStatus.ACTIVE
+    },
     orderBy: { createdAt: "desc" },
     take: limit,
     include: reviewInclude
@@ -199,6 +214,9 @@ export async function getRecentReviewsPage(
   viewerUserId?: string
 ): Promise<PaginatedReviewsResponse> {
   const rows = await prisma.review.findMany({
+    where: {
+      visibilityStatus: ReviewVisibilityStatus.ACTIVE
+    },
     orderBy: { createdAt: "desc" },
     skip: offset,
     take: limit + 1,
@@ -211,6 +229,7 @@ export async function getRecentReviewsPage(
 export async function getReviewsByGame(rawgId: number, viewerUserId?: string): Promise<ReviewItem[]> {
   const rows = await prisma.review.findMany({
     where: {
+      visibilityStatus: ReviewVisibilityStatus.ACTIVE,
       game: {
         rawgId
       }
@@ -235,7 +254,8 @@ export async function getMyReviewsPage(
 ): Promise<PaginatedReviewsResponse> {
   const rows = await prisma.review.findMany({
     where: {
-      userId
+      userId,
+      visibilityStatus: ReviewVisibilityStatus.ACTIVE
     },
     orderBy: {
       updatedAt: "desc"
@@ -254,7 +274,8 @@ export async function getReviewsByUser(
 ): Promise<ReviewItem[]> {
   const rows = await prisma.review.findMany({
     where: {
-      userId
+      userId,
+      visibilityStatus: ReviewVisibilityStatus.ACTIVE
     },
     orderBy: {
       updatedAt: "desc"
@@ -368,6 +389,70 @@ export async function deleteReviewById(userId: string, reviewId: string): Promis
   });
 }
 
+export async function createReviewReport(
+  reporterUserId: string,
+  reviewId: string,
+  input: unknown
+): Promise<ReviewReportCreateResponse> {
+  const parsed = reviewReportValidator.parse(input);
+
+  const review = await prisma.review.findUnique({
+    where: {
+      id: reviewId
+    },
+    select: {
+      id: true,
+      userId: true,
+      visibilityStatus: true
+    }
+  });
+
+  if (!review || review.visibilityStatus !== ReviewVisibilityStatus.ACTIVE) {
+    throw new AppError(404, "Review not found");
+  }
+
+  if (review.userId === reporterUserId) {
+    throw new AppError(400, "You cannot report your own review");
+  }
+
+  const existingOpenReport = await prisma.reviewReport.findUnique({
+    where: {
+      reviewId_reporterUserId_status: {
+        reviewId,
+        reporterUserId,
+        status: ReportStatus.OPEN
+      }
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (existingOpenReport) {
+    return {
+      ok: true,
+      reportId: existingOpenReport.id
+    };
+  }
+
+  const report = await prisma.reviewReport.create({
+    data: {
+      reviewId,
+      reporterUserId,
+      reason: parsed.reason,
+      details: parsed.details ?? null
+    },
+    select: {
+      id: true
+    }
+  });
+
+  return {
+    ok: true,
+    reportId: report.id
+  };
+}
+
 export async function likeReviewById(
   userId: string,
   reviewId: string
@@ -378,11 +463,12 @@ export async function likeReviewById(
     },
     select: {
       id: true,
-      userId: true
+      userId: true,
+      visibilityStatus: true
     }
   });
 
-  if (!review) {
+  if (!review || review.visibilityStatus !== ReviewVisibilityStatus.ACTIVE) {
     throw new AppError(404, "Review not found");
   }
 
@@ -459,11 +545,12 @@ export async function unlikeReviewById(
     },
     select: {
       id: true,
-      userId: true
+      userId: true,
+      visibilityStatus: true
     }
   });
 
-  if (!review) {
+  if (!review || review.visibilityStatus !== ReviewVisibilityStatus.ACTIVE) {
     throw new AppError(404, "Review not found");
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { buildSuspendedPath, getSuspendedUntilFromApiError } from "@/lib/utils/suspension";
 
 type LikeResponse = {
   likesCount: number;
@@ -59,8 +60,13 @@ export function ReviewLikeButton({
 
       const data = (await response.json().catch(() => null)) as
         | LikeResponse
-        | { error?: string }
+        | { error?: string; suspendedUntil?: string | null }
         | null;
+
+      if (data && "error" in data && data.error === "account_suspended") {
+        router.push(buildSuspendedPath(getSuspendedUntilFromApiError(data)));
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(data && "error" in data ? data.error ?? "Falha ao curtir review" : "Falha ao curtir review");

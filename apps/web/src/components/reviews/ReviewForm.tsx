@@ -1,7 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Status } from "@gamebox/shared/constants/enums";
+import { buildSuspendedPath, getSuspendedUntilFromApiError } from "@/lib/utils/suspension";
 import { RatingInput } from "./RatingInput";
 
 type ReviewFormProps = {
@@ -18,6 +20,7 @@ type ReviewFormProps = {
 };
 
 export function ReviewForm({ rawgId, reviewId, initialData, onSuccess, onCancel }: ReviewFormProps) {
+  const router = useRouter();
   const [rating, setRating] = useState(initialData?.rating ?? 7);
   const [recommend, setRecommend] = useState(initialData?.recommend ?? true);
   const [status, setStatus] = useState<Status>(initialData?.status ?? Status.PLAYING);
@@ -48,7 +51,13 @@ export function ReviewForm({ rawgId, reviewId, initialData, onSuccess, onCancel 
       });
 
       if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        const data = (await response.json().catch(() => null)) as { error?: string; suspendedUntil?: string | null } | null;
+
+        if (data?.error === "account_suspended") {
+          router.push(buildSuspendedPath(getSuspendedUntilFromApiError(data)));
+          return;
+        }
+
         throw new Error(data?.error ?? "Não foi possível salvar a review");
       }
 
@@ -82,7 +91,7 @@ export function ReviewForm({ rawgId, reviewId, initialData, onSuccess, onCancel 
       </label>
 
       <div className="space-y-2">
-        <p className="text-sm text-slate-700 dark:text-slate-200">Recomendação</p>
+        <p className="text-sm text-slate-700 dark:text-slate-200">Recomendacao</p>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:gap-4">
           <button
