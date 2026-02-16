@@ -38,7 +38,7 @@ export function ReviewCard({
   const coverSizes = gameCoverSize === "md" ? "(max-width: 640px) 128px, 160px" : "36px";
 
   return (
-    <article className="w-full max-w-full space-y-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="w-full max-w-full space-y-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:relative lg:flex lg:h-full lg:flex-col lg:gap-3 lg:space-y-0 lg:pb-14">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0 space-y-1">
           <Link
@@ -155,11 +155,31 @@ export function ReviewCard({
       {review.body ? <p className="break-words text-sm text-slate-700">{review.body}</p> : null}
 
       {onEdit || onDelete || onReport ? (
-        <div className="flex w-full items-center justify-end gap-2">
+        <div className="flex w-full items-center justify-end gap-2 pt-1 lg:absolute lg:bottom-4 lg:right-4 lg:w-auto lg:pt-0">
+          {onEdit ? (
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+              onClick={onEdit}
+            >
+              Editar
+            </button>
+          ) : null}
+
+          {onDelete ? (
+            <button
+              type="button"
+              className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
+              onClick={onDelete}
+            >
+              Excluir
+            </button>
+          ) : null}
+
           {onReport ? (
             <button
               type="button"
-              className="ml-auto inline-flex items-center gap-1 rounded-md border border-amber-200 px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50"
+              className="inline-flex items-center gap-1 rounded-md border border-amber-200 px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50"
               onClick={onReport}
             >
               <svg
@@ -183,26 +203,6 @@ export function ReviewCard({
                 <circle cx="10" cy="14.75" r="0.8" fill="currentColor" stroke="none" />
               </svg>
               Denunciar
-            </button>
-          ) : null}
-
-          {onEdit ? (
-            <button
-              type="button"
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
-              onClick={onEdit}
-            >
-              Editar
-            </button>
-          ) : null}
-
-          {onDelete ? (
-            <button
-              type="button"
-              className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
-              onClick={onDelete}
-            >
-              Excluir
             </button>
           ) : null}
         </div>

@@ -209,7 +209,7 @@ export default function GamePage() {
         </div>
 
         {reviewsLoading ? (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2 lg:[&>*]:h-full">
             <ReviewCardSkeleton compact />
             <ReviewCardSkeleton compact />
           </div>
@@ -218,7 +218,7 @@ export default function GamePage() {
 
         {!reviewsLoading && !reviewsError ? (
           reviews.length > 0 ? (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2 lg:[&>*]:h-full">
               {reviews.map((review) => (
                 <ReviewCard
                   key={review.id}

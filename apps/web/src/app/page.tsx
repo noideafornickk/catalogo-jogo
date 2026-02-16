@@ -230,7 +230,7 @@ export default function HomePage() {
           {recentError ? <p className="text-sm text-red-600">{recentError}</p> : null}
 
           {recentLoading ? (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2 lg:[&>*]:h-full">
               {Array.from({ length: 4 }).map((_, index) => (
                 <ReviewCardSkeleton key={`recent-skeleton-${index}`} />
               ))}
@@ -239,7 +239,7 @@ export default function HomePage() {
 
           {!recentLoading && !recentError && recentReviews.length > 0 ? (
             <div className="min-w-0 space-y-4">
-              <div className="min-w-0 max-w-full grid gap-4 lg:grid-cols-2">
+              <div className="min-w-0 max-w-full grid gap-4 lg:grid-cols-2 lg:[&>*]:h-full">
                 {recentReviews.map((review) => (
                   <ReviewCard
                     key={review.id}
@@ -265,7 +265,7 @@ export default function HomePage() {
               </div>
 
               {recentLoadingMore ? (
-                <div className="grid gap-4 lg:grid-cols-2">
+                <div className="grid gap-4 lg:grid-cols-2 lg:[&>*]:h-full">
                   {Array.from({ length: 2 }).map((_, index) => (
                     <ReviewCardSkeleton key={`recent-loading-more-${index}`} compact />
                   ))}

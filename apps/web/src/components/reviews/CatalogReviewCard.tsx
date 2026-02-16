@@ -15,7 +15,7 @@ type CatalogReviewCardProps = {
 
 export function CatalogReviewCard({ review, onEdit, onDelete, onReport }: CatalogReviewCardProps) {
   return (
-    <article className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:relative lg:flex lg:h-full lg:flex-col lg:gap-3 lg:space-y-0 lg:pb-14">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
           <Link
@@ -91,14 +91,34 @@ export function CatalogReviewCard({ review, onEdit, onDelete, onReport }: Catalo
         />
       </div>
 
-      {review.body ? <p className="text-sm text-slate-700">{review.body}</p> : null}
+      {review.body ? <p className="break-words text-sm text-slate-700">{review.body}</p> : null}
 
       {onEdit || onDelete || onReport ? (
-        <div className="flex w-full items-center justify-end gap-2">
+        <div className="flex w-full items-center justify-end gap-2 pt-1 lg:absolute lg:bottom-4 lg:right-4 lg:w-auto lg:pt-0">
+          {onEdit ? (
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+              onClick={onEdit}
+            >
+              Editar
+            </button>
+          ) : null}
+
+          {onDelete ? (
+            <button
+              type="button"
+              className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
+              onClick={onDelete}
+            >
+              Excluir
+            </button>
+          ) : null}
+
           {onReport ? (
             <button
               type="button"
-              className="ml-auto inline-flex items-center gap-1 rounded-md border border-amber-200 px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50"
+              className="inline-flex items-center gap-1 rounded-md border border-amber-200 px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50"
               onClick={onReport}
             >
               <svg
@@ -122,26 +142,6 @@ export function CatalogReviewCard({ review, onEdit, onDelete, onReport }: Catalo
                 <circle cx="10" cy="14.75" r="0.8" fill="currentColor" stroke="none" />
               </svg>
               Denunciar
-            </button>
-          ) : null}
-
-          {onEdit ? (
-            <button
-              type="button"
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
-              onClick={onEdit}
-            >
-              Editar
-            </button>
-          ) : null}
-
-          {onDelete ? (
-            <button
-              type="button"
-              className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
-              onClick={onDelete}
-            >
-              Excluir
             </button>
           ) : null}
         </div>
