@@ -94,3 +94,5 @@ pnpm build
 - Perfil com edicao apenas de bio
 - Perfil com alteracao de avatar (Cloudinary) com crop 1:1, zoom e pan
 - Atribuicao RAWG no footer em todas as paginas
+
+-Projeto maneiro, aprendi umas pá de coisa, e envelheci 30 anos em 2 dias, ja posso aposentar?
