@@ -36,14 +36,14 @@ export function ReviewCard({
   const coverSizes = gameCoverSize === "md" ? "(max-width: 640px) 128px, 160px" : "36px";
 
   return (
-    <article className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="w-full max-w-full space-y-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0 space-y-1">
           <Link
             href={`/games/${review.game.rawgId}`}
-            className="inline-flex max-w-full text-base font-semibold text-slate-900 hover:underline"
+            className="block max-w-full text-base font-semibold text-slate-900 hover:underline"
           >
-            <span className="truncate">{review.game.title}</span>
+            <span className="block max-w-full truncate">{review.game.title}</span>
           </Link>
           <p className="text-sm text-slate-500">{formatDateTime(review.createdAt)}</p>
         </div>
@@ -58,40 +58,40 @@ export function ReviewCard({
 
       {showUser ? (
         <div
-          className={`flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 ${
+          className={`flex w-full max-w-full flex-wrap items-center gap-3 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 ${
             shouldShowGameCover ? "sm:justify-between" : "justify-start"
           }`}
         >
-          <div className="flex min-w-0 items-center gap-2 text-sm text-slate-700">
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-700">
             {review.user.isPrivate ? (
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 max-w-full items-center gap-2">
                 {review.user.avatarUrl ? (
                   <img
                     src={review.user.avatarUrl}
                     alt={review.user.name}
-                    className="h-7 w-7 rounded-full object-cover"
+                    className="h-7 w-7 shrink-0 rounded-full object-cover"
                   />
                 ) : null}
-                <span className="truncate">{review.user.name}</span>
+                <span className="block min-w-0 max-w-full truncate">{review.user.name}</span>
               </div>
             ) : (
               <Link
                 href={`/users/${review.user.id}`}
-                className="flex min-w-0 items-center gap-2 hover:underline"
+                className="flex min-w-0 max-w-full items-center gap-2 hover:underline"
               >
                 {review.user.avatarUrl ? (
                   <img
                     src={review.user.avatarUrl}
                     alt={review.user.name}
-                    className="h-7 w-7 rounded-full object-cover"
+                    className="h-7 w-7 shrink-0 rounded-full object-cover"
                   />
                 ) : null}
-                <span className="truncate">{review.user.name}</span>
+                <span className="block min-w-0 max-w-full truncate">{review.user.name}</span>
               </Link>
             )}
 
             {review.user.isPrivate ? (
-              <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <span className="shrink-0 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 Perfil privado
               </span>
             ) : null}
@@ -124,7 +124,7 @@ export function ReviewCard({
           className="block rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 hover:bg-slate-100"
         >
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Descrição oficial</p>
-          <p className="mt-1 text-preview-clamp-two text-fade-last-line text-sm leading-6 text-slate-700">
+          <p className="mt-1 break-words text-preview-clamp-two text-fade-last-line text-sm leading-6 text-slate-700">
             {review.game.descriptionPreview}
           </p>
         </Link>
@@ -150,7 +150,7 @@ export function ReviewCard({
         />
       </div>
 
-      {review.body ? <p className="text-sm text-slate-700">{review.body}</p> : null}
+      {review.body ? <p className="break-words text-sm text-slate-700">{review.body}</p> : null}
 
       {onEdit || onDelete ? (
         <div className="flex gap-2">
