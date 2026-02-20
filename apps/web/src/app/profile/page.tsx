@@ -5,7 +5,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Cropper, { type Area } from "react-easy-crop";
 import { useSession } from "next-auth/react";
+import type { BadgeVisibility, FavoritesResponse } from "@gamebox/shared/types/api";
+import type { FavoriteGame, GameSummary } from "@gamebox/shared/types/game";
+import type { RankBadge } from "@gamebox/shared/types/rank";
+import { GameSearchModal } from "@/components/games/GameSearchModal";
+import { PermanentBadges } from "@/components/users/PermanentBadges";
+import { RankBadgeIcons } from "@/components/users/RankBadgeIcons";
 import { ProfilePageSkeleton } from "@/components/states/ProfilePageSkeleton";
+import { useDebouncedValue } from "@/lib/utils/debounce";
 import { buildSuspendedPath, getSuspendedUntilFromApiError } from "@/lib/utils/suspension";
 
 type AvatarCrop = {
@@ -18,11 +25,13 @@ type AvatarCrop = {
 type ProfileResponse = {
   id: string;
   name: string;
+  rankBadges: RankBadge[];
   avatarUrl: string;
   avatarPublicId: string | null;
   avatarCrop: AvatarCrop | null;
   bio: string | null;
   isPrivate: boolean;
+  badgeVisibility: BadgeVisibility;
   counts: {
     totalReviews: number;
     finishedCount: number;
@@ -30,7 +39,18 @@ type ProfileResponse = {
     wishlistCount: number;
     droppedCount: number;
     totalLikesReceived: number;
+    followersCount: number;
+    followingCount: number;
   };
+  favorites: FavoriteGame[];
+};
+
+const DEFAULT_BADGE_VISIBILITY: BadgeVisibility = {
+  first_of_many: true,
+  reviews_master: true,
+  review_critic: true,
+  followers_star: true,
+  full_explorer: true
 };
 
 type UploadAvatarResponse = {
@@ -44,6 +64,9 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
+  const [badgeVisibility, setBadgeVisibility] = useState<BadgeVisibility>(
+    DEFAULT_BADGE_VISIBILITY
+  );
   const [editingName, setEditingName] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -57,6 +80,14 @@ export default function ProfilePage() {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [favoritesModalOpen, setFavoritesModalOpen] = useState(false);
+  const [favoriteDraft, setFavoriteDraft] = useState<FavoriteGame[]>([]);
+  const [favoriteSearch, setFavoriteSearch] = useState("");
+  const [favoriteResults, setFavoriteResults] = useState<GameSummary[]>([]);
+  const [favoriteSearchLoading, setFavoriteSearchLoading] = useState(false);
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+  const debouncedFavoriteSearch = useDebouncedValue(favoriteSearch, 300);
 
   useEffect(() => {
     return () => {
@@ -88,6 +119,8 @@ export default function ProfilePage() {
       setName(data.name);
       setBio(data.bio ?? "");
       setIsPrivate(data.isPrivate);
+      setBadgeVisibility(data.badgeVisibility ?? DEFAULT_BADGE_VISIBILITY);
+      setFavoriteDraft(data.favorites ?? []);
       setAvatarError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Erro inesperado");
@@ -117,7 +150,7 @@ export default function ProfilePage() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ name, bio, isPrivate })
+        body: JSON.stringify({ name, bio, isPrivate, badgeVisibility })
       });
 
       if (!response.ok) {
@@ -136,6 +169,8 @@ export default function ProfilePage() {
       setName(data.name);
       setBio(data.bio ?? "");
       setIsPrivate(data.isPrivate);
+      setBadgeVisibility(data.badgeVisibility ?? DEFAULT_BADGE_VISIBILITY);
+      setFavoriteDraft(data.favorites ?? []);
       setEditingName(false);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Erro inesperado");
@@ -254,6 +289,8 @@ export default function ProfilePage() {
       setName(profileData.name);
       setBio(profileData.bio ?? "");
       setIsPrivate(profileData.isPrivate);
+      setBadgeVisibility(profileData.badgeVisibility ?? DEFAULT_BADGE_VISIBILITY);
+      setFavoriteDraft(profileData.favorites ?? []);
       closeCropModal();
     } catch (uploadError) {
       setAvatarError(uploadError instanceof Error ? uploadError.message : "Erro inesperado ao atualizar avatar");
@@ -261,6 +298,183 @@ export default function ProfilePage() {
       setAvatarUploading(false);
     }
   }
+
+  function normalizeFavoritePositions(items: FavoriteGame[]): FavoriteGame[] {
+    return items.map((item, index) => ({
+      ...item,
+      position: index + 1
+    }));
+  }
+
+  function openFavoritesModal() {
+    if (!profile) {
+      return;
+    }
+
+    setFavoriteDraft(normalizeFavoritePositions(profile.favorites ?? []));
+    setFavoriteSearch("");
+    setFavoriteResults([]);
+    setFavoriteError(null);
+    setFavoritesModalOpen(true);
+  }
+
+  function closeFavoritesModal() {
+    setFavoritesModalOpen(false);
+    setFavoriteSearch("");
+    setFavoriteResults([]);
+    setFavoriteError(null);
+  }
+
+  function addFavoriteGame(game: GameSummary) {
+    let reachedLimit = false;
+
+    setFavoriteDraft((previous) => {
+      if (previous.some((item) => item.rawgId === game.rawgId)) {
+        return previous;
+      }
+
+      if (previous.length >= 4) {
+        reachedLimit = true;
+        return previous;
+      }
+
+      return normalizeFavoritePositions([
+        ...previous,
+        {
+          position: previous.length + 1,
+          rawgId: game.rawgId,
+          title: game.title,
+          coverUrl: game.coverUrl ?? null,
+          released: game.released ?? null
+        }
+      ]);
+    });
+
+    if (reachedLimit) {
+      setFavoriteError("Você pode ter no máximo 4 favoritos.");
+      return;
+    }
+
+    setFavoriteError(null);
+  }
+
+  function removeFavoriteGame(rawgId: number) {
+    setFavoriteDraft((previous) =>
+      normalizeFavoritePositions(previous.filter((item) => item.rawgId !== rawgId))
+    );
+    setFavoriteError(null);
+  }
+
+  function moveFavoriteGame(rawgId: number, direction: -1 | 1) {
+    setFavoriteDraft((previous) => {
+      const currentIndex = previous.findIndex((item) => item.rawgId === rawgId);
+      if (currentIndex < 0) {
+        return previous;
+      }
+
+      const nextIndex = currentIndex + direction;
+      if (nextIndex < 0 || nextIndex >= previous.length) {
+        return previous;
+      }
+
+      const next = [...previous];
+      [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
+      return normalizeFavoritePositions(next);
+    });
+  }
+
+  async function saveFavoriteGames() {
+    setFavoriteSaving(true);
+    setFavoriteError(null);
+
+    try {
+      const response = await fetch("/api/bff/profile/favorites", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          rawgIds: favoriteDraft.map((item) => item.rawgId)
+        })
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string; suspendedUntil?: string | null }
+          | null;
+        if (data?.error === "account_suspended") {
+          router.replace(buildSuspendedPath(getSuspendedUntilFromApiError(data)));
+          return;
+        }
+        throw new Error(data?.error ?? "Falha ao salvar favoritos.");
+      }
+
+      const data = (await response.json()) as FavoritesResponse;
+      const nextFavorites = data.items ?? [];
+
+      setFavoriteDraft(nextFavorites);
+      setProfile((previous) =>
+        previous
+          ? {
+              ...previous,
+              favorites: nextFavorites
+            }
+          : previous
+      );
+      closeFavoritesModal();
+    } catch (saveError) {
+      setFavoriteError(saveError instanceof Error ? saveError.message : "Erro inesperado");
+    } finally {
+      setFavoriteSaving(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!favoritesModalOpen) {
+      return;
+    }
+
+    const query = debouncedFavoriteSearch.trim();
+    if (query.length < 2) {
+      setFavoriteResults([]);
+      setFavoriteSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setFavoriteSearchLoading(true);
+
+    async function runSearch() {
+      try {
+        const response = await fetch(`/api/bff/rawg/search?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          throw new Error("Falha ao buscar jogos.");
+        }
+
+        const data = (await response.json()) as GameSummary[];
+        const selectedIds = new Set(favoriteDraft.map((item) => item.rawgId));
+        setFavoriteResults(data.filter((item) => !selectedIds.has(item.rawgId)).slice(0, 8));
+      } catch (searchError) {
+        if (searchError instanceof DOMException && searchError.name === "AbortError") {
+          return;
+        }
+
+        setFavoriteResults([]);
+        setFavoriteError(searchError instanceof Error ? searchError.message : "Falha ao buscar jogos.");
+      } finally {
+        setFavoriteSearchLoading(false);
+      }
+    }
+
+    void runSearch();
+
+    return () => {
+      controller.abort();
+    };
+  }, [debouncedFavoriteSearch, favoriteDraft, favoritesModalOpen]);
 
   if (status === "loading") {
     return <ProfilePageSkeleton />;
@@ -291,17 +505,17 @@ export default function ProfilePage() {
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       {!loading && profile ? (
-        <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-          <aside className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="grid gap-4 lg:grid-cols-[300px_1fr] lg:items-start">
+          <aside className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:space-y-2 lg:p-4">
             <div className="space-y-2">
               {profile.avatarUrl ? (
                 <img
                   src={profile.avatarUrl}
                   alt={profile.name}
-                  className="h-20 w-20 rounded-full object-cover"
+                  className="h-20 w-20 rounded-full object-cover lg:h-16 lg:w-16"
                 />
               ) : (
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600 lg:h-16 lg:w-16">
                   {profile.name.slice(0, 1).toUpperCase()}
                 </div>
               )}
@@ -369,8 +583,11 @@ export default function ProfilePage() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold text-slate-900">{profile.name}</h2>
+              <div className="flex flex-wrap items-start gap-2">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold text-slate-900">{profile.name}</h2>
+                  <RankBadgeIcons badges={profile.rankBadges ?? []} size="md" variant="labels" />
+                </div>
                 <button
                   type="button"
                   onClick={() => setEditingName(true)}
@@ -384,24 +601,73 @@ export default function ProfilePage() {
               </div>
             )}
 
-            <div className="space-y-1 text-sm text-slate-700">
-              <p>Total reviews: {profile.counts.totalReviews}</p>
-              <p>Finalizados: {profile.counts.finishedCount}</p>
-              <p>Jogando: {profile.counts.playingCount}</p>
-              <p>Wishlist: {profile.counts.wishlistCount}</p>
-              <p>Dropados: {profile.counts.droppedCount}</p>
-              <p>Total de curtidas: {profile.counts.totalLikesReceived}</p>
+            <div className="space-y-3">
+              <section className="rounded-lg border border-slate-200 bg-slate-50 p-3 lg:p-2.5">
+                <div className="space-y-0.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Estatisticas gerais
+                  </p>
+                  <p className="text-[10px] text-slate-500 lg:text-[9px]">Resumo principal do seu perfil</p>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 lg:mt-1.5 lg:gap-1.5">
+                  <div className="flex min-h-[66px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-2 text-center lg:min-h-[54px] lg:py-1.5">
+                    <p className="text-base font-semibold text-slate-900 lg:text-sm">{profile.counts.totalReviews}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-600 lg:text-[10px]">Total reviews</p>
+                  </div>
+                  <div className="flex min-h-[66px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-2 text-center lg:min-h-[54px] lg:py-1.5">
+                    <p className="text-base font-semibold text-slate-900 lg:text-sm">{profile.counts.totalLikesReceived}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-600 lg:text-[10px]">Total de curtidas</p>
+                  </div>
+                  <div className="flex min-h-[66px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-2 text-center lg:min-h-[54px] lg:py-1.5">
+                    <p className="text-base font-semibold text-slate-900 lg:text-sm">{profile.counts.followersCount}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-600 lg:text-[10px]">Seguidores</p>
+                  </div>
+                  <div className="flex min-h-[66px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-2 text-center lg:min-h-[54px] lg:py-1.5">
+                    <p className="text-base font-semibold text-slate-900 lg:text-sm">{profile.counts.followingCount}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-600 lg:text-[10px]">Seguindo</p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-slate-200 bg-slate-50 p-3 lg:p-2.5">
+                <div className="space-y-0.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Status do catálogo
+                  </p>
+                  <p className="text-[10px] text-slate-500 lg:text-[9px]">Distribuição das suas avaliações</p>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 lg:mt-1.5 lg:gap-1.5">
+                  <div className="flex min-h-[62px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-2 text-center lg:min-h-[50px] lg:py-1.5">
+                    <p className="text-base font-semibold text-slate-900 lg:text-sm">{profile.counts.finishedCount}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-600 lg:text-[10px]">Finalizados</p>
+                  </div>
+                  <div className="flex min-h-[62px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-2 text-center lg:min-h-[50px] lg:py-1.5">
+                    <p className="text-base font-semibold text-slate-900 lg:text-sm">{profile.counts.playingCount}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-600 lg:text-[10px]">Jogando</p>
+                  </div>
+                  <div className="flex min-h-[62px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-2 text-center lg:min-h-[50px] lg:py-1.5">
+                    <p className="text-base font-semibold text-slate-900 lg:text-sm">{profile.counts.wishlistCount}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-600 lg:text-[10px]">Wishlist</p>
+                  </div>
+                  <div className="flex min-h-[62px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-2 text-center lg:min-h-[50px] lg:py-1.5">
+                    <p className="text-base font-semibold text-slate-900 lg:text-sm">{profile.counts.droppedCount}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-600 lg:text-[10px]">Dropados</p>
+                  </div>
+                </div>
+              </section>
             </div>
 
-            <Link
-              href={`/users/${encodeURIComponent(profile.id)}`}
-              className="inline-flex items-center rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              Ver perfil completo
-            </Link>
+            <div className="flex justify-center">
+              <Link
+                href={`/users/${encodeURIComponent(profile.id)}`}
+                className="inline-flex items-center rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                Ver perfil completo
+              </Link>
+            </div>
           </aside>
 
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:h-fit">
             <label htmlFor="profile-bio" className="block space-y-1 text-sm text-slate-700">
               <span>Bio</span>
               <textarea
@@ -460,19 +726,250 @@ export default function ProfilePage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                void saveProfile();
-              }}
-              disabled={saving || name.trim().length < 2}
-              className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60 sm:w-auto"
-            >
-              {saving ? "Salvando..." : "Salvar perfil"}
-            </button>
+            <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium text-slate-900">Jogos favoritos</p>
+                <button
+                  type="button"
+                  onClick={openFavoritesModal}
+                  className="rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                >
+                  Editar favoritos
+                </button>
+              </div>
+
+              {profile.favorites.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {profile.favorites.map((favorite) => (
+                    <Link
+                      key={`profile-favorite-${favorite.rawgId}`}
+                      href={`/games/${favorite.rawgId}`}
+                      className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-2 hover:bg-slate-50"
+                    >
+                      {favorite.coverUrl ? (
+                        <img
+                          src={favorite.coverUrl}
+                          alt={favorite.title}
+                          className="h-10 w-8 rounded object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-8 rounded bg-slate-200" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900">
+                          {favorite.title}
+                        </p>
+                        <p className="text-[11px] text-slate-500">#{favorite.position}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-600">
+                  Você ainda não adicionou favoritos. Escolha até 4 jogos.
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  void saveProfile();
+                }}
+                disabled={saving || name.trim().length < 2}
+                className="inline-flex items-center rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60 sm:px-4 sm:py-2 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white dark:ring-1 dark:ring-slate-300/70 dark:shadow-sm"
+              >
+                {saving ? "Salvando..." : "Salvar perfil"}
+              </button>
+            </div>
+
+            <div className="border-t border-slate-200 pt-3 text-center">
+              <p className="text-sm font-medium text-slate-900">Badges</p>
+              <p className="mt-1 text-xs text-slate-600">Conquistas permanentes do seu perfil.</p>
+              <PermanentBadges
+                className="mt-2"
+                mode="owner"
+                ownerStorageKey={profile.id}
+                helperTextAlign="center"
+                visibility={badgeVisibility}
+                onVisibilityChange={setBadgeVisibility}
+                totalReviews={profile.counts.totalReviews}
+                totalLikesReceived={profile.counts.totalLikesReceived}
+                followersCount={profile.counts.followersCount}
+                finishedCount={profile.counts.finishedCount}
+                playingCount={profile.counts.playingCount}
+                wishlistCount={profile.counts.wishlistCount}
+                droppedCount={profile.counts.droppedCount}
+              />
+            </div>
           </div>
         </div>
       ) : null}
+
+      <GameSearchModal
+        open={favoritesModalOpen}
+        title="Editar jogos favoritos"
+        onClose={() => {
+          if (!favoriteSaving) {
+            closeFavoritesModal();
+          }
+        }}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-700">
+            Escolha at&eacute; 4 jogos favoritos. Voc&ecirc; pode adicionar sem precisar avaliar.
+          </p>
+
+          <label htmlFor="favorite-search" className="block space-y-1 text-sm text-slate-700">
+            <span>Buscar jogo</span>
+            <input
+              id="favorite-search"
+              name="favorite-search"
+              type="text"
+              value={favoriteSearch}
+              onChange={(event) => {
+                setFavoriteSearch(event.target.value);
+                setFavoriteError(null);
+              }}
+              placeholder="Digite o nome do jogo"
+              className="w-full rounded-md border border-slate-300 px-3 py-2"
+            />
+          </label>
+
+          {favoriteSearchLoading ? (
+            <p className="text-xs text-slate-600">Buscando jogos...</p>
+          ) : null}
+
+          {favoriteSearch.trim().length >= 2 && !favoriteSearchLoading ? (
+            favoriteResults.length > 0 ? (
+              <div className="max-h-44 space-y-2 overflow-auto rounded-md border border-slate-200 bg-slate-50 p-2">
+                {favoriteResults.map((game) => {
+                  const isDisabled = favoriteDraft.length >= 4;
+
+                  return (
+                    <div
+                      key={`favorite-result-${game.rawgId}`}
+                      className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-2"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        {game.coverUrl ? (
+                          <img
+                            src={game.coverUrl}
+                            alt={game.title}
+                            className="h-10 w-8 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="h-10 w-8 rounded bg-slate-200" />
+                        )}
+                        <p className="truncate text-sm text-slate-900">{game.title}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => addFavoriteGame(game)}
+                        className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Nenhum jogo encontrado para este termo.</p>
+            )
+          ) : null}
+
+          <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-slate-900">Selecionados</p>
+              <span className="text-xs text-slate-500">{favoriteDraft.length}/4</span>
+            </div>
+
+            {favoriteDraft.length > 0 ? (
+              <div className="space-y-2">
+                {favoriteDraft.map((favorite, index) => (
+                  <div
+                    key={`favorite-selected-${favorite.rawgId}`}
+                    className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      {favorite.coverUrl ? (
+                        <img
+                          src={favorite.coverUrl}
+                          alt={favorite.title}
+                          className="h-10 w-8 rounded object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-8 rounded bg-slate-200" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900">
+                          {favorite.title}
+                        </p>
+                        <p className="text-[11px] text-slate-500">Posição #{index + 1}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => moveFavoriteGame(favorite.rawgId, -1)}
+                        className="rounded border border-slate-300 px-1.5 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === favoriteDraft.length - 1}
+                        onClick={() => moveFavoriteGame(favorite.rawgId, 1)}
+                        className="rounded border border-slate-300 px-1.5 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeFavoriteGame(favorite.rawgId)}
+                        className="rounded border border-rose-200 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Nenhum favorito selecionado.</p>
+            )}
+          </div>
+
+          {favoriteError ? <p className="text-sm text-red-600">{favoriteError}</p> : null}
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={closeFavoritesModal}
+              disabled={favoriteSaving}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void saveFavoriteGames();
+              }}
+              disabled={favoriteSaving}
+              className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
+            >
+              {favoriteSaving ? "Salvando..." : "Salvar favoritos"}
+            </button>
+          </div>
+        </div>
+      </GameSearchModal>
 
       {isCropModalOpen && previewUrl ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -539,4 +1036,5 @@ export default function ProfilePage() {
     </section>
   );
 }
+
 

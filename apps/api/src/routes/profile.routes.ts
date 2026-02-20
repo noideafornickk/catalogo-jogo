@@ -4,9 +4,11 @@ import { authJwt, optionalAuthJwt } from "../middlewares/authJwt";
 import { ensureActiveUser } from "../middlewares/ensureActiveUser";
 import {
   createMySuspensionAppealController,
+  getMyFavoritesController,
   getMyProfileController,
   getPublicProfileController,
   uploadMyAvatarController,
+  updateMyFavoritesController,
   updateMyAvatarController,
   updateMyProfileController
 } from "../controllers/profile.controller";
@@ -21,6 +23,8 @@ const avatarUpload = multer({
 
 profileRoutes.get("/me", authJwt, getMyProfileController);
 profileRoutes.put("/me", authJwt, ensureActiveUser, updateMyProfileController);
+profileRoutes.get("/me/favorites", authJwt, getMyFavoritesController);
+profileRoutes.put("/me/favorites", authJwt, ensureActiveUser, updateMyFavoritesController);
 profileRoutes.post("/me/suspension-appeal", authJwt, createMySuspensionAppealController);
 profileRoutes.post(
   "/me/avatar/upload",

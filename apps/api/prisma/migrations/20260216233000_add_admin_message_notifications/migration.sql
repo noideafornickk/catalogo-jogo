@@ -1,0 +1,13 @@
+DO $$
+BEGIN
+  ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'ADMIN_MESSAGE';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE "Notification"
+  ALTER COLUMN "reviewId" DROP NOT NULL;
+
+ALTER TABLE "Notification"
+  ADD COLUMN IF NOT EXISTS "title" TEXT,
+  ADD COLUMN IF NOT EXISTS "body" TEXT;

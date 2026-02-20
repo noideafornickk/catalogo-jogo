@@ -4,17 +4,23 @@ import {
   ReviewVisibilityStatus,
   type Prisma
 } from "@prisma/client";
+import {
+  Status as SharedStatus,
+  ReviewVisibilityStatus as SharedReviewVisibilityStatus
+} from "@gamebox/shared/constants/enums";
 import { reviewReportValidator } from "@gamebox/shared/validators/moderation";
 import type { ReviewReportCreateResponse } from "@gamebox/shared/types/api";
 import { reviewUpdateValidator, reviewValidator } from "@gamebox/shared/validators/review";
 import type { ReviewItem } from "@gamebox/shared/types/review";
 import type { PaginatedReviewsResponse } from "@gamebox/shared/types/api";
+import type { RankBadge } from "@gamebox/shared/types/rank";
 import { prisma } from "../db/prisma";
 import { AppError } from "../middlewares/errorHandler";
 import { getRawgGameDetails, syncGameDescriptions } from "./rawg.service";
 import { toIsoDate } from "../utils/dates";
 import { toDescriptionPreview } from "../utils/text";
 import { normalizeRawgImageUrl } from "../utils/rawgImage";
+import { getRankBadgesForUsers } from "./rankBadge.service";
 
 const reviewInclude = {
   user: {
@@ -59,6 +65,21 @@ type ReviewWithRelations = Prisma.ReviewGetPayload<{
   include: typeof reviewInclude;
 }>;
 
+type RecentQueueRow = {
+  id: string;
+  gameId: string;
+  createdAt: Date;
+};
+
+type RecentHighlightEntry = {
+  reviewId: string;
+  gameId: string;
+  reviewCreatedAt: Date;
+  activeSince: Date;
+};
+
+const RECENT_HIGHLIGHT_WINDOW_MS = 48 * 60 * 60 * 1000;
+
 function normalizeBody(body: string | undefined): string | null {
   if (!body) {
     return null;
@@ -93,6 +114,7 @@ async function getLikedReviewIds(
 function toReviewItem(
   review: ReviewWithRelations,
   descriptionText: string | null,
+  rankBadges: RankBadge[],
   likedByMe: boolean,
   isOwner: boolean
 ): ReviewItem {
@@ -100,8 +122,8 @@ function toReviewItem(
     id: review.id,
     rating: review.rating,
     recommend: review.recommend,
-    status: review.status,
-    visibilityStatus: review.visibilityStatus,
+    status: review.status as SharedStatus,
+    visibilityStatus: review.visibilityStatus as SharedReviewVisibilityStatus,
     body: review.body,
     likesCount: review._count.likes,
     likedByMe,
@@ -114,13 +136,16 @@ function toReviewItem(
       coverUrl: normalizeRawgImageUrl(review.game.coverUrl),
       released: toIsoDate(review.game.released),
       descriptionPreview: toDescriptionPreview(descriptionText),
-      reviewCount: review.game._count.reviews
+      reviewCount: review.game._count.reviews,
+      otherReviewsCount: Math.max(0, review.game._count.reviews - 1),
+      otherReviewers: []
     },
     user: {
       id: review.user.id,
       name: review.user.name,
       avatarUrl: review.user.avatarUrl,
-      isPrivate: review.user.profile?.isPrivate ?? false
+      isPrivate: review.user.profile?.isPrivate ?? false,
+      rankBadges
     }
   };
 }
@@ -165,15 +190,233 @@ async function toReviewItems(rows: ReviewWithRelations[], viewerUserId?: string)
     rows.map((row) => row.id),
     viewerUserId
   );
+  const userRankBadgeMap = await getRankBadgesForUsers(rows.map((row) => row.user.id));
 
   return rows.map((row) =>
     toReviewItem(
       row,
       descriptionMap.get(row.game.rawgId) ?? (row.game.descriptionText?.trim() || null),
+      userRankBadgeMap.get(row.user.id) ?? [],
       likedReviewIds.has(row.id),
       viewerUserId ? row.user.id === viewerUserId : false
     )
   );
+}
+
+function buildRecentHighlightEntries(
+  rows: RecentQueueRow[],
+  nowDate: Date = new Date()
+): RecentHighlightEntry[] {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const nowMs = nowDate.getTime();
+  const queueByGame = new Map<string, RecentQueueRow[]>();
+
+  for (const row of rows) {
+    const queue = queueByGame.get(row.gameId);
+    if (queue) {
+      queue.push(row);
+    } else {
+      queueByGame.set(row.gameId, [row]);
+    }
+  }
+
+  const entries: RecentHighlightEntry[] = [];
+
+  for (const [gameId, queue] of queueByGame.entries()) {
+    let active = queue[0];
+    let activeSinceMs = active.createdAt.getTime();
+
+    for (let index = 1; index < queue.length; index += 1) {
+      if (nowMs < activeSinceMs + RECENT_HIGHLIGHT_WINDOW_MS) {
+        break;
+      }
+
+      const nextReview = queue[index];
+      const nextWindowStartMs = activeSinceMs + RECENT_HIGHLIGHT_WINDOW_MS;
+      active = nextReview;
+      activeSinceMs = Math.max(nextReview.createdAt.getTime(), nextWindowStartMs);
+    }
+
+    entries.push({
+      reviewId: active.id,
+      gameId,
+      reviewCreatedAt: active.createdAt,
+      activeSince: new Date(activeSinceMs)
+    });
+  }
+
+  entries.sort((a, b) => {
+    const byActiveSince = b.activeSince.getTime() - a.activeSince.getTime();
+    if (byActiveSince !== 0) {
+      return byActiveSince;
+    }
+
+    const byCreatedAt = b.reviewCreatedAt.getTime() - a.reviewCreatedAt.getTime();
+    if (byCreatedAt !== 0) {
+      return byCreatedAt;
+    }
+
+    return b.reviewId.localeCompare(a.reviewId);
+  });
+
+  return entries;
+}
+
+async function getRecentHighlightEntries(): Promise<RecentHighlightEntry[]> {
+  const queueRows = await prisma.review.findMany({
+    where: {
+      visibilityStatus: ReviewVisibilityStatus.ACTIVE
+    },
+    select: {
+      id: true,
+      gameId: true,
+      createdAt: true
+    },
+    orderBy: [
+      {
+        gameId: "asc"
+      },
+      {
+        createdAt: "asc"
+      },
+      {
+        id: "asc"
+      }
+    ]
+  });
+
+  return buildRecentHighlightEntries(queueRows);
+}
+
+async function enrichRecentItemsWithOtherReviewers(items: ReviewItem[]): Promise<ReviewItem[]> {
+  if (items.length === 0) {
+    return items;
+  }
+
+  const rawgIds = Array.from(new Set(items.map((item) => item.game.rawgId)));
+  const selectedReviewIdByRawgId = new Map(items.map((item) => [item.game.rawgId, item.id]));
+  const otherReviewersByRawgId = new Map<
+    number,
+    Array<{
+      id: string;
+      name: string;
+      avatarUrl: string;
+    }>
+  >();
+
+  const relatedRows = await prisma.review.findMany({
+    where: {
+      visibilityStatus: ReviewVisibilityStatus.ACTIVE,
+      game: {
+        rawgId: {
+          in: rawgIds
+        }
+      }
+    },
+    select: {
+      id: true,
+      game: {
+        select: {
+          rawgId: true
+        }
+      },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true
+        }
+      }
+    },
+    orderBy: [
+      {
+        createdAt: "desc"
+      },
+      {
+        id: "desc"
+      }
+    ]
+  });
+
+  for (const row of relatedRows) {
+    const rawgId = row.game.rawgId;
+
+    if (row.id === selectedReviewIdByRawgId.get(rawgId)) {
+      continue;
+    }
+
+    const existing = otherReviewersByRawgId.get(rawgId) ?? [];
+    if (existing.length >= 3) {
+      continue;
+    }
+
+    if (!existing.some((user) => user.id === row.user.id)) {
+      existing.push({
+        id: row.user.id,
+        name: row.user.name,
+        avatarUrl: row.user.avatarUrl
+      });
+      otherReviewersByRawgId.set(rawgId, existing);
+    }
+  }
+
+  return items.map((item) => ({
+    ...item,
+    game: {
+      ...item.game,
+      otherReviewsCount: Math.max(0, item.game.reviewCount - 1),
+      otherReviewers: otherReviewersByRawgId.get(item.game.rawgId) ?? []
+    }
+  }));
+}
+
+async function getRecentHighlightedItems(
+  limit: number,
+  offset: number,
+  viewerUserId?: string
+): Promise<PaginatedReviewsResponse> {
+  const entries = await getRecentHighlightEntries();
+  const pageEntries = entries.slice(offset, offset + limit);
+  const hasMore = offset + limit < entries.length;
+
+  if (pageEntries.length === 0) {
+    return {
+      items: [],
+      limit,
+      offset,
+      hasMore,
+      nextOffset: null
+    };
+  }
+
+  const selectedIds = pageEntries.map((entry) => entry.reviewId);
+  const rows = await prisma.review.findMany({
+    where: {
+      id: {
+        in: selectedIds
+      }
+    },
+    include: reviewInclude
+  });
+
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  const orderedRows = selectedIds
+    .map((reviewId) => rowById.get(reviewId))
+    .filter((row): row is ReviewWithRelations => Boolean(row));
+
+  const items = await toReviewItems(orderedRows, viewerUserId);
+  const enrichedItems = await enrichRecentItemsWithOtherReviewers(items);
+
+  return {
+    items: enrichedItems,
+    limit,
+    offset,
+    hasMore,
+    nextOffset: hasMore ? offset + limit : null
+  };
 }
 
 async function toPaginatedReviewResponse(
@@ -196,16 +439,8 @@ async function toPaginatedReviewResponse(
 }
 
 export async function getRecentReviews(limit: number, viewerUserId?: string): Promise<ReviewItem[]> {
-  const rows = await prisma.review.findMany({
-    where: {
-      visibilityStatus: ReviewVisibilityStatus.ACTIVE
-    },
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    include: reviewInclude
-  });
-
-  return toReviewItems(rows, viewerUserId);
+  const page = await getRecentHighlightedItems(limit, 0, viewerUserId);
+  return page.items;
 }
 
 export async function getRecentReviewsPage(
@@ -213,17 +448,7 @@ export async function getRecentReviewsPage(
   offset: number,
   viewerUserId?: string
 ): Promise<PaginatedReviewsResponse> {
-  const rows = await prisma.review.findMany({
-    where: {
-      visibilityStatus: ReviewVisibilityStatus.ACTIVE
-    },
-    orderBy: { createdAt: "desc" },
-    skip: offset,
-    take: limit + 1,
-    include: reviewInclude
-  });
-
-  return toPaginatedReviewResponse(rows, limit, offset, viewerUserId);
+  return getRecentHighlightedItems(limit, offset, viewerUserId);
 }
 
 export async function getReviewsByGame(rawgId: number, viewerUserId?: string): Promise<ReviewItem[]> {

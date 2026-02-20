@@ -48,8 +48,7 @@ export async function getRankings(range: RankingRange): Promise<RankingItem[]> {
   const gameMap = new Map(games.map((game) => [game.id, game]));
   const descriptionMap = await syncGameDescriptions(games.map((game) => game.rawgId));
 
-  const items: RankingItem[] = grouped
-    .map((row) => {
+  const mappedItems: Array<RankingItem | null> = grouped.map((row) => {
       const game = gameMap.get(row.gameId);
       if (!game) {
         return null;
@@ -59,7 +58,7 @@ export async function getRankings(range: RankingRange): Promise<RankingItem[]> {
       const reviewCount = row._count._all;
       const score = Number(((avgRating * reviewCount) / (reviewCount + 2)).toFixed(4));
 
-      return {
+      const item: RankingItem = {
         game: {
           rawgId: game.rawgId,
           title: game.title,
@@ -76,8 +75,12 @@ export async function getRankings(range: RankingRange): Promise<RankingItem[]> {
         reviewCount,
         score
       };
-    })
-    .filter((item): item is RankingItem => Boolean(item))
+
+      return item;
+    });
+
+  const items = mappedItems
+    .filter((item): item is RankingItem => item !== null)
     .sort((a, b) => b.score - a.score);
 
   return items;

@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReviewItem } from "@gamebox/shared/types/review";
 import { formatDateTime } from "@/lib/utils/dates";
 import { rating10ToStars } from "@/lib/utils/rating";
+import { RankBadgeIcons } from "@/components/users/RankBadgeIcons";
 import { StarRating } from "./StarRating";
 import { ReviewLikeButton } from "./ReviewLikeButton";
 
@@ -12,6 +13,7 @@ type ReviewCardProps = {
   showGameCover?: boolean;
   gameCoverSize?: "sm" | "md";
   showDescriptionPreview?: boolean;
+  showOtherReviewsHint?: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
   onReport?: () => void;
@@ -23,6 +25,7 @@ export function ReviewCard({
   showGameCover = true,
   gameCoverSize = "sm",
   showDescriptionPreview = true,
+  showOtherReviewsHint = false,
   onEdit,
   onDelete,
   onReport
@@ -31,6 +34,13 @@ export function ReviewCard({
   const shouldShowDescriptionPreview = Boolean(
     showUser && showDescriptionPreview && review.game.descriptionPreview
   );
+  const shouldShowOtherReviewsHint = Boolean(showUser && showOtherReviewsHint);
+  const otherReviewsCount = Math.max(0, review.game.reviewCount - 1);
+  const otherReviewsLabel =
+    otherReviewsCount === 1
+      ? "+1 outra review deste jogo"
+      : `+${otherReviewsCount} outras reviews deste jogo`;
+  const otherReviewers = review.game.otherReviewers ?? [];
   const coverClassName =
   gameCoverSize === "md"
       ? "relative h-20 w-32 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-100 sm:h-24 sm:w-40"
@@ -48,6 +58,35 @@ export function ReviewCard({
             <span className="block max-w-full truncate">{review.game.title}</span>
           </Link>
           <p className="text-sm text-slate-500">{formatDateTime(review.createdAt)}</p>
+          {shouldShowOtherReviewsHint ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={`/games/${review.game.rawgId}`}
+                className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100"
+              >
+                {otherReviewsCount > 0 ? otherReviewsLabel : "Ainda sem outras reviews deste jogo"}
+              </Link>
+
+              {otherReviewsCount > 0 && otherReviewers.length > 0 ? (
+                <div className="inline-flex items-center -space-x-1.5">
+                  {otherReviewers.slice(0, 3).map((reviewer) => (
+                    <Link
+                      key={reviewer.id}
+                      href={`/users/${reviewer.id}`}
+                      title={reviewer.name}
+                      className="inline-flex rounded-full border-2 border-white shadow-sm"
+                    >
+                      <img
+                        src={reviewer.avatarUrl}
+                        alt={reviewer.name}
+                        className="h-5 w-5 rounded-full object-cover"
+                      />
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="self-start rounded-md bg-slate-100 px-2.5 py-1 text-sm font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200 sm:shrink-0">
@@ -65,32 +104,25 @@ export function ReviewCard({
           }`}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-700">
-            {review.user.isPrivate ? (
-              <div className="flex min-w-0 max-w-full items-center gap-2">
-                {review.user.avatarUrl ? (
-                  <img
-                    src={review.user.avatarUrl}
-                    alt={review.user.name}
-                    className="h-7 w-7 shrink-0 rounded-full object-cover"
-                  />
-                ) : null}
-                <span className="block min-w-0 max-w-full truncate">{review.user.name}</span>
-              </div>
-            ) : (
-              <Link
-                href={`/users/${review.user.id}`}
-                className="flex min-w-0 max-w-full items-center gap-2 hover:underline"
-              >
-                {review.user.avatarUrl ? (
-                  <img
-                    src={review.user.avatarUrl}
-                    alt={review.user.name}
-                    className="h-7 w-7 shrink-0 rounded-full object-cover"
-                  />
-                ) : null}
-                <span className="block min-w-0 max-w-full truncate">{review.user.name}</span>
-              </Link>
-            )}
+            <Link
+              href={`/users/${review.user.id}`}
+              className="flex min-w-0 max-w-full items-center gap-2 hover:underline"
+            >
+              {review.user.avatarUrl ? (
+                <img
+                  src={review.user.avatarUrl}
+                  alt={review.user.name}
+                  className="h-7 w-7 shrink-0 rounded-full object-cover"
+                />
+              ) : null}
+              <span className="block min-w-0 max-w-full truncate">{review.user.name}</span>
+            </Link>
+            <RankBadgeIcons
+              badges={review.user.rankBadges}
+              size="sm"
+              variant="chips"
+              className="ml-0.5"
+            />
 
             {review.user.isPrivate ? (
               <span className="shrink-0 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">

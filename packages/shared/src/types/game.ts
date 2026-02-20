@@ -20,3 +20,7 @@ export type RawgGameDetails = {
   metacritic: number | null;
   rating: number | null;
 };
+
+export type FavoriteGame = GameSummary & {
+  position: number;
+};

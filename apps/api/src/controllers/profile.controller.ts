@@ -4,8 +4,10 @@ import { AppError } from "../middlewares/errorHandler";
 import {
   createMySuspensionAppeal,
   getMyProfile,
+  getMyFavoriteGames,
   getPublicProfile,
   uploadMyAvatarOriginal,
+  updateMyFavoriteGames,
   updateMyAvatar,
   updateMyProfile
 } from "../services/profile.service";
@@ -121,6 +123,42 @@ export async function createMySuspensionAppealController(
 
     const result = await createMySuspensionAppeal(user.id, req.body);
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getMyFavoritesController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as AuthenticatedRequest).user;
+    if (!user) {
+      throw new AppError(401, "Unauthorized");
+    }
+
+    const favorites = await getMyFavoriteGames(user.id);
+    res.json({ items: favorites });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateMyFavoritesController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as AuthenticatedRequest).user;
+    if (!user) {
+      throw new AppError(401, "Unauthorized");
+    }
+
+    const favorites = await updateMyFavoriteGames(user.id, req.body);
+    res.json({ items: favorites });
   } catch (error) {
     next(error);
   }

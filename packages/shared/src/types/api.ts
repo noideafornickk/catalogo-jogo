@@ -1,6 +1,8 @@
-import { GameSummary } from "./game";
+import { FavoriteGame, GameSummary } from "./game";
 import { ReviewItem } from "./review";
+import { RankBadge } from "./rank";
 import {
+  FollowRelationshipStatus,
   ReportReason,
   ReportStatus,
   ReviewVisibilityStatus
@@ -44,6 +46,8 @@ export type ProfileCounts = {
   wishlistCount: number;
   droppedCount: number;
   totalLikesReceived: number;
+  followersCount: number;
+  followingCount: number;
 };
 
 export type AvatarCrop = {
@@ -53,9 +57,18 @@ export type AvatarCrop = {
   height: number;
 };
 
+export type BadgeVisibility = {
+  first_of_many: boolean;
+  reviews_master: boolean;
+  review_critic: boolean;
+  followers_star: boolean;
+  full_explorer: boolean;
+};
+
 export type ProfileMeResponse = {
   id: string;
   name: string;
+  rankBadges: RankBadge[];
   avatarUrl: string;
   avatarPublicId: string | null;
   avatarCrop: AvatarCrop | null;
@@ -64,25 +77,36 @@ export type ProfileMeResponse = {
   isAdmin: boolean;
   suspendedUntil: string | null;
   isSuspended: boolean;
+  badgeVisibility: BadgeVisibility;
   counts: ProfileCounts;
+  favorites: FavoriteGame[];
 };
 
 export type PublicProfileResponse = {
   id: string;
   name: string;
+  rankBadges: RankBadge[];
   avatarUrl: string;
   avatarPublicId: string | null;
   avatarCrop: AvatarCrop | null;
   bio: string | null;
   isPrivate: boolean;
+  canViewFullProfile: boolean;
+  followStatus: FollowRelationshipStatus;
+  badgeVisibility: BadgeVisibility;
   counts: ProfileCounts;
+  favorites: FavoriteGame[];
   reviews: ReviewItem[];
 };
 
 export type NotificationType =
   | "REVIEW_LIKED"
   | "REPORT_RESOLVED"
-  | "REVIEW_MODERATED";
+  | "REVIEW_MODERATED"
+  | "ADMIN_MESSAGE"
+  | "FOLLOW_REQUEST"
+  | "FOLLOW_ACCEPTED"
+  | "FOLLOW_CREATED";
 
 export type NotificationItem = {
   id: string;
@@ -101,7 +125,17 @@ export type NotificationItem = {
       title: string;
     };
     likesCount: number;
-  };
+  } | null;
+  message: {
+    title: string | null;
+    body: string | null;
+  } | null;
+  follow: {
+    id: string;
+    status: "PENDING" | "ACCEPTED";
+    followerUserId: string;
+    followingUserId: string;
+  } | null;
 };
 
 export type NotificationsResponse = {
@@ -187,4 +221,40 @@ export type AdminSuspensionAppealsResponse = {
   status: "OPEN" | "RESOLVED" | "REJECTED";
   limit: number;
   items: AdminSuspensionAppealItem[];
+};
+
+export type AdminSendMessageResponse = {
+  ok: true;
+  sentCount: number;
+  recipientMode: "single" | "broadcast";
+};
+
+export type FollowMutationResponse = {
+  ok: true;
+  status: Exclude<FollowRelationshipStatus, FollowRelationshipStatus.SELF>;
+  followId: string | null;
+  requiresApproval: boolean;
+};
+
+export type FollowRequestDecisionResponse = {
+  ok: true;
+  status: FollowRelationshipStatus.NONE | FollowRelationshipStatus.FOLLOWING;
+  followId: string;
+};
+
+export type FavoritesResponse = {
+  items: FavoriteGame[];
+};
+
+export type AdminUserLookupItem = {
+  id: string;
+  name: string;
+  avatarUrl: string;
+  googleSub: string;
+};
+
+export type AdminUserLookupResponse = {
+  query: string;
+  limit: number;
+  items: AdminUserLookupItem[];
 };

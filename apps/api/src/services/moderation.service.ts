@@ -5,7 +5,13 @@ import {
   ReviewVisibilityStatus,
   type Prisma
 } from "@prisma/client";
+import {
+  ReportReason as SharedReportReason,
+  ReportStatus as SharedReportStatus,
+  ReviewVisibilityStatus as SharedReviewVisibilityStatus
+} from "@gamebox/shared/constants/enums";
 import type {
+  AdminUserLookupResponse,
   AdminReportItem,
   AdminReportsResponse,
   AdminSuspensionAppealItem,
@@ -35,6 +41,63 @@ function normalizeNullableText(value: string | null | undefined): string | null 
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+export async function lookupAdminUsers(
+  adminUserId: string,
+  query: string,
+  limit: number
+): Promise<AdminUserLookupResponse> {
+  const normalizedQuery = query.trim();
+  const safeLimit = Number.isNaN(limit) || limit <= 0 ? 8 : Math.min(limit, 20);
+
+  if (!normalizedQuery) {
+    return {
+      query: "",
+      limit: safeLimit,
+      items: []
+    };
+  }
+
+  const rows = await prisma.user.findMany({
+    where: {
+      id: {
+        not: adminUserId
+      },
+      OR: [
+        {
+          name: {
+            contains: normalizedQuery,
+            mode: "insensitive"
+          }
+        },
+        {
+          googleSub: {
+            contains: normalizedQuery
+          }
+        }
+      ]
+    },
+    orderBy: [{ name: "asc" }, { createdAt: "desc" }],
+    take: safeLimit,
+    select: {
+      id: true,
+      name: true,
+      avatarUrl: true,
+      googleSub: true
+    }
+  });
+
+  return {
+    query: normalizedQuery,
+    limit: safeLimit,
+    items: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      avatarUrl: row.avatarUrl,
+      googleSub: row.googleSub
+    }))
+  };
 }
 
 async function createUnreadNotificationIfMissing(
@@ -154,9 +217,9 @@ export async function getAdminReports({
 
   const items: AdminReportItem[] = rows.map((row) => ({
     id: row.id,
-    reason: row.reason,
+    reason: row.reason as SharedReportReason,
     details: row.details,
-    status: row.status,
+    status: row.status as SharedReportStatus,
     createdAt: row.createdAt.toISOString(),
     resolvedAt: row.resolvedAt?.toISOString() ?? null,
     review: {
@@ -164,7 +227,7 @@ export async function getAdminReports({
       rating: row.review.rating,
       body: row.review.body,
       createdAt: row.review.createdAt.toISOString(),
-      visibilityStatus: row.review.visibilityStatus,
+      visibilityStatus: row.review.visibilityStatus as SharedReviewVisibilityStatus,
       hiddenAt: row.review.hiddenAt?.toISOString() ?? null,
       hiddenReason: row.review.hiddenReason ?? null,
       game: {
@@ -194,7 +257,7 @@ export async function getAdminReports({
   }));
 
   return {
-    status,
+    status: status as SharedReportStatus,
     limit: safeLimit,
     items
   };

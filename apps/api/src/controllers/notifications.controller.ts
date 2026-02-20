@@ -6,6 +6,7 @@ import {
   markAllNotificationsAsRead,
   markNotificationAsRead
 } from "../services/notifications.service";
+import { getRequiredRouteParam } from "../utils/request";
 
 export async function getMyNotificationsController(
   req: Request,
@@ -39,7 +40,8 @@ export async function markNotificationAsReadController(
       throw new AppError(401, "Unauthorized");
     }
 
-    const result = await markNotificationAsRead(user.id, req.params.id);
+    const notificationId = getRequiredRouteParam(req, "id");
+    const result = await markNotificationAsRead(user.id, notificationId);
     res.json(result);
   } catch (error) {
     next(error);

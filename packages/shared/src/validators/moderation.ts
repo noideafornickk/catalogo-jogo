@@ -39,6 +39,22 @@ export const adminHideReviewValidator = z.object({
   reason: hideReasonSchema
 });
 
+export const adminMessageValidator = z.object({
+  recipientUserId: z
+    .string()
+    .trim()
+    .uuid()
+    .optional()
+    .transform((value) => (value === "" ? undefined : value)),
+  title: z.string().trim().min(2).max(120),
+  body: z.string().trim().min(1).max(1200)
+});
+
+export const adminUserLookupQueryValidator = z.object({
+  query: z.string().trim().min(1).max(80),
+  limit: z.coerce.number().int().min(1).max(20).default(8)
+});
+
 export const createSuspensionAppealValidator = z.object({
   message: suspensionAppealMessageSchema
 });
@@ -50,6 +66,8 @@ export const adminSuspensionAppealStatusUpdateValidator = z.object({
 export type ReviewReportInput = z.infer<typeof reviewReportValidator>;
 export type AdminReportStatusUpdateInput = z.infer<typeof adminReportStatusUpdateValidator>;
 export type AdminHideReviewInput = z.infer<typeof adminHideReviewValidator>;
+export type AdminMessageInput = z.infer<typeof adminMessageValidator>;
+export type AdminUserLookupQueryInput = z.infer<typeof adminUserLookupQueryValidator>;
 export type CreateSuspensionAppealInput = z.infer<typeof createSuspensionAppealValidator>;
 export type AdminSuspensionAppealStatusUpdateInput = z.infer<
   typeof adminSuspensionAppealStatusUpdateValidator

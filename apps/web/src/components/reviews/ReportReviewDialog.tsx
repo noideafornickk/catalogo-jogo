@@ -13,10 +13,10 @@ type ReportReviewDialogProps = {
 };
 
 const REASON_LABELS: Record<ReportReason, string> = {
-  [ReportReason.OFFENSIVE]: "Conteudo ofensivo",
+  [ReportReason.OFFENSIVE]: "Conteúdo ofensivo",
   [ReportReason.HATE]: "Discurso de odio",
   [ReportReason.SPAM]: "Spam",
-  [ReportReason.SEXUAL]: "Conteudo sexual improprio",
+  [ReportReason.SEXUAL]: "Conteúdo sexual impróprio",
   [ReportReason.PERSONAL_DATA]: "Exposicao de dados pessoais",
   [ReportReason.OTHER]: "Outro"
 };

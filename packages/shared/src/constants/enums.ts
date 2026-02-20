@@ -40,3 +40,27 @@ export enum SuspensionAppealStatus {
 }
 
 export const SUSPENSION_APPEAL_STATUS_VALUES = Object.values(SuspensionAppealStatus);
+
+export enum FollowRelationshipStatus {
+  NONE = "NONE",
+  REQUESTED = "REQUESTED",
+  FOLLOWING = "FOLLOWING",
+  SELF = "SELF"
+}
+
+export const FOLLOW_RELATIONSHIP_STATUS_VALUES = Object.values(FollowRelationshipStatus);
+
+export enum FollowRequestAction {
+  ACCEPT = "accept",
+  REJECT = "reject"
+}
+
+export const FOLLOW_REQUEST_ACTION_VALUES = Object.values(FollowRequestAction);
+
+export enum RankBadgeCode {
+  TOP_REVIEWS = "TOP_REVIEWS",
+  TOP_LIKES = "TOP_LIKES",
+  TOP_FOLLOWERS = "TOP_FOLLOWERS"
+}
+
+export const RANK_BADGE_CODE_VALUES = Object.values(RankBadgeCode);

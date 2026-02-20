@@ -14,6 +14,7 @@ import {
   unlikeReviewById,
   updateReviewById
 } from "../services/reviews.service";
+import { getRequiredRouteParam } from "../utils/request";
 
 export async function getRecentReviewsController(
   req: Request,
@@ -122,7 +123,8 @@ export async function updateReviewController(
       throw new AppError(401, "Unauthorized");
     }
 
-    const review = await updateReviewById(user.id, req.params.id, req.body);
+    const reviewId = getRequiredRouteParam(req, "id");
+    const review = await updateReviewById(user.id, reviewId, req.body);
     res.json(review);
   } catch (error) {
     next(error);
@@ -140,7 +142,8 @@ export async function deleteReviewController(
       throw new AppError(401, "Unauthorized");
     }
 
-    await deleteReviewById(user.id, req.params.id);
+    const reviewId = getRequiredRouteParam(req, "id");
+    await deleteReviewById(user.id, reviewId);
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -158,7 +161,8 @@ export async function reportReviewController(
       throw new AppError(401, "Unauthorized");
     }
 
-    const report = await createReviewReport(user.id, req.params.id, req.body);
+    const reviewId = getRequiredRouteParam(req, "id");
+    const report = await createReviewReport(user.id, reviewId, req.body);
     res.json(report);
   } catch (error) {
     next(error);
@@ -176,7 +180,8 @@ export async function likeReviewController(
       throw new AppError(401, "Unauthorized");
     }
 
-    const result = await likeReviewById(user.id, req.params.id);
+    const reviewId = getRequiredRouteParam(req, "id");
+    const result = await likeReviewById(user.id, reviewId);
     res.json(result);
   } catch (error) {
     next(error);
@@ -194,7 +199,8 @@ export async function unlikeReviewController(
       throw new AppError(401, "Unauthorized");
     }
 
-    const result = await unlikeReviewById(user.id, req.params.id);
+    const reviewId = getRequiredRouteParam(req, "id");
+    const result = await unlikeReviewById(user.id, reviewId);
     res.json(result);
   } catch (error) {
     next(error);

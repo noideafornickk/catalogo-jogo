@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -99,7 +99,7 @@ export function ReviewLikeButton({
         <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="h-3.5 w-3.5">
           <path d="M2.5 9.5A1.5 1.5 0 0 1 4 8h2.18a1 1 0 0 0 .95-.68l1.55-4.64A1.5 1.5 0 0 1 10.1 1.7h.12A1.78 1.78 0 0 1 12 3.48L11.77 8H15a2 2 0 0 1 1.95 2.45l-1.2 5A2 2 0 0 1 13.8 17H6a1.5 1.5 0 0 1-1.5-1.5V9.5Zm-1 0V17h2V8h-2v1.5Z" />
         </svg>
-        <span>{isOwner ? "Sua review" : likedByMe ? "Util" : "Foi util"}</span>
+        <span>{isOwner ? "Sua review" : likedByMe ? "Útil" : "Foi útil"}</span>
       </button>
 
       <span className="text-xs text-slate-600 dark:text-slate-400">{likesCount}</span>
@@ -107,3 +107,4 @@ export function ReviewLikeButton({
     </div>
   );
 }
+

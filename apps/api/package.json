@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsup --config tsup.config.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "pnpm run typecheck && tsup --config tsup.config.ts",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

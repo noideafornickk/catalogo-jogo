@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/states/EmptyState";
 import { ReviewCardSkeleton } from "@/components/states/ReviewCardSkeleton";
 import { ConfirmActionDialog } from "@/components/ui/ConfirmActionDialog";
 
-type HomeTab = "recentes" | "melhores" | "sugestoes";
+type HomeTab = "recentes" | "melhores" | "sugestões";
 const RECENT_PAGE_SIZE = 8;
 
 export default function HomePage() {
@@ -213,9 +213,9 @@ export default function HomePage() {
 
         <button
           type="button"
-          onClick={() => setActiveTab("sugestoes")}
+          onClick={() => setActiveTab("sugestões")}
           className={`min-w-0 rounded-md px-2 py-2 text-xs font-medium sm:px-4 sm:text-sm ${
-            activeTab === "sugestoes"
+            activeTab === "sugestões"
               ? "bg-slate-900 text-white"
               : "border border-slate-300 bg-white text-slate-700"
           }`}
@@ -246,6 +246,7 @@ export default function HomePage() {
                     review={review}
                     showUser
                     gameCoverSize="md"
+                    showOtherReviewsHint
                     onEdit={review.isOwner ? () => setEditingRecentReview(review) : undefined}
                     onDelete={
                       review.isOwner
@@ -362,7 +363,7 @@ export default function HomePage() {
         )
       ) : null}
 
-      {!homeLoading && !homeError && activeTab === "sugestoes" ? (
+      {!homeLoading && !homeError && activeTab === "sugestões" ? (
         discoverGames.length > 0 ? (
           <GameGrid games={discoverGames} />
         ) : (
@@ -426,3 +427,4 @@ export default function HomePage() {
     </section>
   );
 }
+

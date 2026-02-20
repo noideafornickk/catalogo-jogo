@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -14,6 +14,7 @@ export function NotificationBell() {
   const { status } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [followActionBusyId, setFollowActionBusyId] = useState<string | null>(null);
   const [data, setData] = useState<NotificationsResponse>(EMPTY_NOTIFICATIONS);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -119,6 +120,33 @@ export function NotificationBell() {
     });
   }
 
+  async function respondToFollowRequest(
+    notificationId: string,
+    followId: string,
+    action: "accept" | "reject"
+  ) {
+    setFollowActionBusyId(notificationId);
+
+    try {
+      const response = await fetch(`/api/bff/follows/requests/${encodeURIComponent(followId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ action })
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      await markOneAsRead(notificationId);
+      await loadNotifications();
+    } finally {
+      setFollowActionBusyId(null);
+    }
+  }
+
   if (status !== "authenticated") {
     return null;
   }
@@ -129,7 +157,7 @@ export function NotificationBell() {
         type="button"
         onClick={() => setMenuOpen((previous) => !previous)}
         className="relative rounded-md border border-slate-300 px-2.5 py-1.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-        aria-label="Notificacoes"
+        aria-label="Notificações"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="h-4 w-4">
           <path d="M10 2a4 4 0 0 0-4 4v1.08c0 .75-.21 1.48-.62 2.1L4.2 11.05A1.5 1.5 0 0 0 5.45 13.5h9.1a1.5 1.5 0 0 0 1.25-2.45l-1.18-1.87A3.98 3.98 0 0 1 14 7.08V6a4 4 0 0 0-4-4Zm2.12 12.5a2.13 2.13 0 0 1-4.24 0h4.24Z" />
@@ -143,7 +171,7 @@ export function NotificationBell() {
       {menuOpen ? (
         <div className="absolute left-0 z-30 mt-2 w-[min(20rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900 sm:left-auto sm:right-0">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Notificacoes</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Notificações</p>
             <button
               type="button"
               onClick={() => {
@@ -158,48 +186,148 @@ export function NotificationBell() {
           {loading ? <p className="text-xs text-slate-500">Carregando...</p> : null}
 
           {!loading && data.items.length === 0 ? (
-            <p className="text-xs text-slate-500">Sem notificacoes por enquanto.</p>
+            <p className="text-xs text-slate-500">Sem notificações por enquanto.</p>
           ) : null}
 
           <div className="max-h-72 space-y-2 overflow-auto">
-            {data.items.map((item) => (
-              <Link
-                key={item.id}
-                href={`/games/${item.review.game.rawgId}`}
-                onClick={() => {
-                  if (!item.readAt) {
-                    void markOneAsRead(item.id);
-                  }
-                  setMenuOpen(false);
-                }}
-                className={`block rounded-lg border px-3 py-2 text-sm ${
-                  item.readAt
-                    ? "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                    : "border-red-100 bg-red-50 text-slate-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-slate-100"
-                }`}
-              >
-                {item.type === "REPORT_RESOLVED" ? (
-                  <p className="break-words">
-                    Agradecemos a denúncia. Obrigado por manter a comunidade limpa e segura.
-                    Interceptamos a review em{" "}
-                    <span className="font-medium">{item.review.game.title}</span> com sucesso.
-                  </p>
-                ) : item.type === "REVIEW_MODERATED" ? (
-                  <p className="break-words">
-                    Sua review em <span className="font-medium">{item.review.game.title}</span>{" "}
-                    foi moderada e ocultada após análise da denúncia.
-                  </p>
-                ) : (
-                  <p className="break-words">
-                    <span className="font-medium">{item.actor.name}</span> curtiu sua review em{" "}
-                    <span className="font-medium">{item.review.game.title}</span>.
-                  </p>
-                )}
-              </Link>
-            ))}
+            {data.items.map((item) => {
+              const baseClassName = `block rounded-lg border px-3 py-2 text-sm ${
+                item.readAt
+                  ? "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                  : "border-red-100 bg-red-50 text-slate-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-slate-100"
+              }`;
+
+              if (item.type === "ADMIN_MESSAGE") {
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      if (!item.readAt) {
+                        void markOneAsRead(item.id);
+                      }
+                      setMenuOpen(false);
+                    }}
+                    className={`${baseClassName} w-full text-left`}
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Comunicado da moderação
+                    </p>
+                    {item.message?.title ? (
+                      <p className="mt-1 break-words font-medium">{item.message.title}</p>
+                    ) : null}
+                    {item.message?.body ? (
+                      <p className="mt-1 break-words">{item.message.body}</p>
+                    ) : (
+                      <p className="mt-1 break-words">
+                        Você recebeu um novo comunicado da moderação.
+                      </p>
+                    )}
+                  </button>
+                );
+              }
+
+              if (item.type === "FOLLOW_REQUEST" && item.follow) {
+                const isBusy = followActionBusyId === item.id;
+
+                return (
+                  <div key={item.id} className={baseClassName}>
+                    <p className="break-words">
+                      <span className="font-medium">{item.actor.name}</span> quer seguir seu perfil.
+                    </p>
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => {
+                          void respondToFollowRequest(item.id, item.follow!.id, "accept");
+                        }}
+                        className="rounded-md border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                      >
+                        Aceitar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => {
+                          void respondToFollowRequest(item.id, item.follow!.id, "reject");
+                        }}
+                        className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        Recusar
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (item.type === "FOLLOW_ACCEPTED" || item.type === "FOLLOW_CREATED") {
+                return (
+                  <Link
+                    key={item.id}
+                    href={`/users/${item.actor.id}`}
+                    onClick={() => {
+                      if (!item.readAt) {
+                        void markOneAsRead(item.id);
+                      }
+                      setMenuOpen(false);
+                    }}
+                    className={baseClassName}
+                  >
+                    {item.type === "FOLLOW_ACCEPTED" ? (
+                      <p className="break-words">
+                        <span className="font-medium">{item.actor.name}</span> aceitou seu pedido para seguir.
+                      </p>
+                    ) : (
+                      <p className="break-words">
+                        <span className="font-medium">{item.actor.name}</span> começou a seguir você.
+                      </p>
+                    )}
+                  </Link>
+                );
+              }
+
+              if (!item.review) {
+                return null;
+              }
+
+              return (
+                <Link
+                  key={item.id}
+                  href={`/games/${item.review.game.rawgId}`}
+                  onClick={() => {
+                    if (!item.readAt) {
+                      void markOneAsRead(item.id);
+                    }
+                    setMenuOpen(false);
+                  }}
+                  className={baseClassName}
+                >
+                  {item.type === "REPORT_RESOLVED" ? (
+                    <p className="break-words">
+                      Agradecemos a denuncia. Obrigado por manter a comunidade limpa e segura.
+                      Interceptamos a review em{" "}
+                      <span className="font-medium">{item.review.game.title}</span> com sucesso.
+                    </p>
+                  ) : item.type === "REVIEW_MODERATED" ? (
+                    <p className="break-words">
+                      Sua review em <span className="font-medium">{item.review.game.title}</span>{" "}
+                      foi moderada e ocultada apos analise da denuncia.
+                    </p>
+                  ) : (
+                    <p className="break-words">
+                      <span className="font-medium">{item.actor.name}</span> curtiu sua review em{" "}
+                      <span className="font-medium">{item.review.game.title}</span>.
+                    </p>
+                  )}
+                </Link>
+              );
+            })}
           </div>
         </div>
       ) : null}
     </div>
   );
 }
+

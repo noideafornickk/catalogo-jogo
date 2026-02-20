@@ -1,10 +1,11 @@
-import {
+﻿import {
   ReviewVisibilityStatus,
   Status,
   SuspensionAppealStatus
 } from "@prisma/client";
+import { FollowRelationshipStatus } from "@gamebox/shared/constants/enums";
 import { avatarApplyValidator } from "@gamebox/shared/validators/avatar";
-import type { ProfileCounts } from "@gamebox/shared/types/api";
+import type { BadgeVisibility, ProfileCounts } from "@gamebox/shared/types/api";
 import type { SuspensionAppealCreateResponse } from "@gamebox/shared/types/api";
 import { createSuspensionAppealValidator } from "@gamebox/shared/validators/moderation";
 import { profileValidator } from "@gamebox/shared/validators/profile";
@@ -12,6 +13,12 @@ import { prisma } from "../db/prisma";
 import { AppError } from "../middlewares/errorHandler";
 import { getReviewsByUser } from "./reviews.service";
 import { isAdminEmail } from "../utils/admin";
+import { getFollowCounters, getViewerFollowStatus } from "./follows.service";
+import {
+  getFavoriteGamesForUser,
+  updateFavoriteGamesForUser
+} from "./favorites.service";
+import { getRankBadgesForUser } from "./rankBadge.service";
 import {
   buildAvatarUrl,
   destroyAvatarAsset,
@@ -27,6 +34,14 @@ export type JwtIdentity = {
   email?: string;
   name?: string;
   avatarUrl?: string;
+};
+
+const DEFAULT_BADGE_VISIBILITY: BadgeVisibility = {
+  first_of_many: true,
+  reviews_master: true,
+  review_critic: true,
+  followers_star: true,
+  full_explorer: true
 };
 
 function toIsoOrNull(value: Date | null): string | null {
@@ -55,6 +70,35 @@ function parseAvatarCrop(value: string | null): AvatarCrop | null {
   }
 }
 
+function normalizeBadgeVisibility(
+  value: Partial<BadgeVisibility> | null | undefined
+): BadgeVisibility {
+  return {
+    first_of_many: value?.first_of_many ?? DEFAULT_BADGE_VISIBILITY.first_of_many,
+    reviews_master: value?.reviews_master ?? DEFAULT_BADGE_VISIBILITY.reviews_master,
+    review_critic: value?.review_critic ?? DEFAULT_BADGE_VISIBILITY.review_critic,
+    followers_star: value?.followers_star ?? DEFAULT_BADGE_VISIBILITY.followers_star,
+    full_explorer: value?.full_explorer ?? DEFAULT_BADGE_VISIBILITY.full_explorer
+  };
+}
+
+function parseBadgeVisibility(value: string | null): BadgeVisibility {
+  if (!value) {
+    return DEFAULT_BADGE_VISIBILITY;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object") {
+      return DEFAULT_BADGE_VISIBILITY;
+    }
+
+    return normalizeBadgeVisibility(parsed as Partial<BadgeVisibility>);
+  } catch {
+    return DEFAULT_BADGE_VISIBILITY;
+  }
+}
+
 export async function ensureUserWithProfile(identity: JwtIdentity) {
   let user = await prisma.user.findUnique({
     where: { googleSub: identity.googleSub }
@@ -64,7 +108,7 @@ export async function ensureUserWithProfile(identity: JwtIdentity) {
     user = await prisma.user.create({
       data: {
         googleSub: identity.googleSub,
-        name: identity.name ?? "Usuario",
+        name: identity.name ?? "Usuário",
         avatarUrl: identity.avatarUrl ?? ""
       }
     });
@@ -94,11 +138,16 @@ export async function getMyProfile(userId: string, requesterEmail?: string | nul
     throw new AppError(404, "User not found");
   }
 
-  const counts = await getProfileCounts(userId);
+  const [counts, favorites, rankBadges] = await Promise.all([
+    getProfileCounts(userId),
+    getFavoriteGamesForUser(userId),
+    getRankBadgesForUser(userId)
+  ]);
 
   return {
     id: user.id,
     name: user.name,
+    rankBadges,
     avatarUrl: user.avatarUrl,
     avatarPublicId: user.avatarPublicId,
     avatarCrop: parseAvatarCrop(user.avatarCrop ?? null),
@@ -107,7 +156,9 @@ export async function getMyProfile(userId: string, requesterEmail?: string | nul
     isAdmin: isAdminEmail(requesterEmail),
     suspendedUntil: toIsoOrNull(user.suspendedUntil),
     isSuspended: isFutureDate(user.suspendedUntil),
-    counts
+    badgeVisibility: parseBadgeVisibility(user.profile?.badgeVisibility ?? null),
+    counts,
+    favorites
   };
 }
 
@@ -117,6 +168,14 @@ export async function updateMyProfile(
   requesterEmail?: string | null
 ) {
   const parsed = profileValidator.parse(input);
+  const normalizedBadgeVisibility =
+    parsed.badgeVisibility !== undefined
+      ? normalizeBadgeVisibility(parsed.badgeVisibility)
+      : undefined;
+  const badgeVisibilityJson =
+    normalizedBadgeVisibility !== undefined
+      ? JSON.stringify(normalizedBadgeVisibility)
+      : undefined;
 
   await prisma.$transaction([
     prisma.user.update({
@@ -130,11 +189,17 @@ export async function updateMyProfile(
       create: {
         userId,
         bio: parsed.bio ?? null,
-        isPrivate: parsed.isPrivate ?? false
+        isPrivate: parsed.isPrivate ?? false,
+        ...(badgeVisibilityJson !== undefined
+          ? { badgeVisibility: badgeVisibilityJson }
+          : {})
       },
       update: {
         bio: parsed.bio ?? null,
-        ...(parsed.isPrivate !== undefined ? { isPrivate: parsed.isPrivate } : {})
+        ...(parsed.isPrivate !== undefined ? { isPrivate: parsed.isPrivate } : {}),
+        ...(badgeVisibilityJson !== undefined
+          ? { badgeVisibility: badgeVisibilityJson }
+          : {})
       }
     })
   ]);
@@ -204,7 +269,8 @@ async function getProfileCounts(userId: string): Promise<ProfileCounts> {
     playingCount,
     wishlistCount,
     droppedCount,
-    totalLikesReceived
+    totalLikesReceived,
+    followCounters
   ] = await Promise.all([
     prisma.review.count({
       where: { userId, visibilityStatus: ReviewVisibilityStatus.ACTIVE }
@@ -244,7 +310,8 @@ async function getProfileCounts(userId: string): Promise<ProfileCounts> {
           visibilityStatus: ReviewVisibilityStatus.ACTIVE
         }
       }
-    })
+    }),
+    getFollowCounters(userId)
   ]);
 
   return {
@@ -253,7 +320,9 @@ async function getProfileCounts(userId: string): Promise<ProfileCounts> {
     playingCount,
     wishlistCount,
     droppedCount,
-    totalLikesReceived
+    totalLikesReceived,
+    followersCount: followCounters.followersCount,
+    followingCount: followCounters.followingCount
   };
 }
 
@@ -272,27 +341,43 @@ export async function getPublicProfile(targetUserId: string, viewerUserId?: stri
   }
 
   const isPrivate = user.profile?.isPrivate ?? false;
-  const isOwner = viewerUserId === user.id;
-  if (isPrivate && !isOwner) {
-    throw new AppError(403, "Profile is private");
-  }
+  const followLookup = await getViewerFollowStatus(viewerUserId, user.id);
+  const canViewFullProfile =
+    !isPrivate ||
+    followLookup.relationshipStatus === FollowRelationshipStatus.SELF ||
+    followLookup.relationshipStatus === FollowRelationshipStatus.FOLLOWING;
 
-  const [counts, reviews] = await Promise.all([
+  const [counts, reviews, favorites, rankBadges] = await Promise.all([
     getProfileCounts(user.id),
-    getReviewsByUser(user.id, viewerUserId)
+    canViewFullProfile ? getReviewsByUser(user.id, viewerUserId) : Promise.resolve([]),
+    canViewFullProfile ? getFavoriteGamesForUser(user.id) : Promise.resolve([]),
+    getRankBadgesForUser(user.id)
   ]);
 
   return {
     id: user.id,
     name: user.name,
+    rankBadges,
     avatarUrl: user.avatarUrl,
     avatarPublicId: user.avatarPublicId,
     avatarCrop: parseAvatarCrop(user.avatarCrop ?? null),
     bio: user.profile?.bio ?? null,
     isPrivate,
+    canViewFullProfile,
+    followStatus: followLookup.relationshipStatus,
+    badgeVisibility: parseBadgeVisibility(user.profile?.badgeVisibility ?? null),
     counts,
+    favorites,
     reviews
   };
+}
+
+export async function getMyFavoriteGames(userId: string) {
+  return getFavoriteGamesForUser(userId);
+}
+
+export async function updateMyFavoriteGames(userId: string, input: unknown) {
+  return updateFavoriteGamesForUser(userId, input);
 }
 
 export async function createMySuspensionAppeal(
@@ -362,3 +447,4 @@ export async function createMySuspensionAppeal(
     status: created.status as SuspensionAppealCreateResponse["status"]
   };
 }
+

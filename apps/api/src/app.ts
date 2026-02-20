@@ -7,6 +7,7 @@ import { rankingsRoutes } from "./routes/rankings.routes";
 import { profileRoutes } from "./routes/profile.routes";
 import { notificationsRoutes } from "./routes/notifications.routes";
 import { adminRoutes } from "./routes/admin.routes";
+import { followsRoutes } from "./routes/follows.routes";
 
 export const app = express();
 
@@ -23,6 +24,7 @@ app.use("/rankings", rankingsRoutes);
 app.use("/profile", profileRoutes);
 app.use("/notifications", notificationsRoutes);
 app.use("/admin", adminRoutes);
+app.use("/follows", followsRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

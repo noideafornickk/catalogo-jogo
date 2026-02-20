@@ -1,4 +1,5 @@
 import { ReviewVisibilityStatus, Status } from "../constants/enums";
+import type { RankBadge } from "./rank";
 
 export type ReviewPayload = {
   rawgId: number;
@@ -27,11 +28,18 @@ export type ReviewItem = {
     released: string | null;
     descriptionPreview: string | null;
     reviewCount: number;
+    otherReviewsCount: number;
+    otherReviewers: Array<{
+      id: string;
+      name: string;
+      avatarUrl: string;
+    }>;
   };
   user: {
     id: string;
     name: string;
     avatarUrl: string;
     isPrivate: boolean;
+    rankBadges: RankBadge[];
   };
 };

@@ -13,7 +13,10 @@
     "./validators/profile": "./src/validators/profile.ts",
     "./validators/avatar": "./src/validators/avatar.ts",
     "./validators/moderation": "./src/validators/moderation.ts",
+    "./validators/follow": "./src/validators/follow.ts",
+    "./validators/favorites": "./src/validators/favorites.ts",
     "./types/game": "./src/types/game.ts",
+    "./types/rank": "./src/types/rank.ts",
     "./types/review": "./src/types/review.ts",
     "./types/api": "./src/types/api.ts"
   },

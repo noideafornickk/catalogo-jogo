@@ -2,7 +2,9 @@ import type { NextFunction, Request, Response } from "express";
 import { ReportStatus, SuspensionAppealStatus } from "@prisma/client";
 import {
   adminHideReviewValidator,
+  adminMessageValidator,
   adminReportStatusUpdateValidator,
+  adminUserLookupQueryValidator,
   adminSuspensionAppealStatusUpdateValidator
 } from "@gamebox/shared/validators/moderation";
 import type { AuthenticatedRequest } from "../middlewares/authJwt";
@@ -11,10 +13,13 @@ import {
   getAdminReports,
   getAdminSuspensionAppeals,
   hideReviewAsAdmin,
+  lookupAdminUsers,
   unhideReviewAsAdmin,
   updateAdminReportStatus,
   updateAdminSuspensionAppealStatus
 } from "../services/moderation.service";
+import { sendAdminMessage } from "../services/notifications.service";
+import { getRequiredRouteParam } from "../utils/request";
 
 function parseReportStatusQuery(value: unknown): ReportStatus {
   const normalized = String(value ?? "OPEN").trim().toUpperCase();
@@ -71,7 +76,8 @@ export async function patchAdminReportController(
     }
 
     const parsed = adminReportStatusUpdateValidator.parse(req.body);
-    const data = await updateAdminReportStatus(req.params.id, parsed.status, user.id);
+    const reportId = getRequiredRouteParam(req, "id");
+    const data = await updateAdminReportStatus(reportId, parsed.status, user.id);
     res.json(data);
   } catch (error) {
     next(error);
@@ -106,7 +112,8 @@ export async function patchAdminSuspensionAppealController(
 
     const parsed = adminSuspensionAppealStatusUpdateValidator.parse(req.body);
     const status = parsed.status as SuspensionAppealStatus;
-    const data = await updateAdminSuspensionAppealStatus(req.params.id, status, user.id);
+    const appealId = getRequiredRouteParam(req, "id");
+    const data = await updateAdminSuspensionAppealStatus(appealId, status, user.id);
     res.json(data);
   } catch (error) {
     next(error);
@@ -125,7 +132,8 @@ export async function hideReviewAsAdminController(
     }
 
     const parsed = adminHideReviewValidator.parse(req.body);
-    const data = await hideReviewAsAdmin(req.params.id, user.id, parsed.reason);
+    const reviewId = getRequiredRouteParam(req, "id");
+    const data = await hideReviewAsAdmin(reviewId, user.id, parsed.reason);
     res.json(data);
   } catch (error) {
     next(error);
@@ -138,8 +146,51 @@ export async function unhideReviewAsAdminController(
   next: NextFunction
 ): Promise<void> {
   try {
-    const data = await unhideReviewAsAdmin(req.params.id);
+    const reviewId = getRequiredRouteParam(req, "id");
+    const data = await unhideReviewAsAdmin(reviewId);
     res.json(data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function postAdminMessageController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as AuthenticatedRequest).user;
+    if (!user) {
+      throw new AppError(401, "Unauthorized");
+    }
+
+    const parsed = adminMessageValidator.parse(req.body);
+    const result = await sendAdminMessage(user.id, parsed);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getAdminUsersController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as AuthenticatedRequest).user;
+    if (!user) {
+      throw new AppError(401, "Unauthorized");
+    }
+
+    const parsed = adminUserLookupQueryValidator.parse({
+      query: req.query.query,
+      limit: req.query.limit
+    });
+
+    const result = await lookupAdminUsers(user.id, parsed.query, parsed.limit);
+    res.json(result);
   } catch (error) {
     next(error);
   }

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ReportReason,
   ReportStatus,
@@ -11,6 +11,9 @@ import {
 import type {
   AdminReportItem,
   AdminReportsResponse,
+  AdminSendMessageResponse,
+  AdminUserLookupItem,
+  AdminUserLookupResponse,
   AdminSuspensionAppealItem,
   AdminSuspensionAppealsResponse
 } from "@gamebox/shared/types/api";
@@ -23,10 +26,10 @@ const STATUS_TABS: Array<{ value: ReportStatus; label: string }> = [
 ];
 
 const REASON_LABELS: Record<ReportReason, string> = {
-  [ReportReason.OFFENSIVE]: "Conteudo ofensivo",
+  [ReportReason.OFFENSIVE]: "Conteúdo ofensivo",
   [ReportReason.HATE]: "Discurso de odio",
   [ReportReason.SPAM]: "Spam",
-  [ReportReason.SEXUAL]: "Conteudo sexual improprio",
+  [ReportReason.SEXUAL]: "Conteúdo sexual impróprio",
   [ReportReason.PERSONAL_DATA]: "Exposicao de dados pessoais",
   [ReportReason.OTHER]: "Outro"
 };
@@ -60,6 +63,20 @@ export function AdminModerationPanel() {
   const [appealsLoading, setAppealsLoading] = useState(true);
   const [appealsError, setAppealsError] = useState<string | null>(null);
   const [appealsBusyId, setAppealsBusyId] = useState<string | null>(null);
+  const [messageTargetMode, setMessageTargetMode] = useState<"broadcast" | "single">("broadcast");
+  const [messageRecipientQuery, setMessageRecipientQuery] = useState("");
+  const [messageRecipientUser, setMessageRecipientUser] = useState<AdminUserLookupItem | null>(
+    null
+  );
+  const [messageRecipientOptions, setMessageRecipientOptions] = useState<AdminUserLookupItem[]>(
+    []
+  );
+  const [messageRecipientLoading, setMessageRecipientLoading] = useState(false);
+  const [messageTitle, setMessageTitle] = useState("");
+  const [messageBody, setMessageBody] = useState("");
+  const [messageBusy, setMessageBusy] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
+  const [messageSuccess, setMessageSuccess] = useState<string | null>(null);
 
   async function loadReports(status: ReportStatus) {
     setLoading(true);
@@ -128,6 +145,68 @@ export function AdminModerationPanel() {
   useEffect(() => {
     void loadAppeals();
   }, []);
+
+  useEffect(() => {
+    if (messageTargetMode !== "single") {
+      setMessageRecipientOptions([]);
+      setMessageRecipientLoading(false);
+      setMessageRecipientQuery("");
+      setMessageRecipientUser(null);
+      return;
+    }
+
+    const query = messageRecipientQuery.trim();
+    if (query.length < 2) {
+      setMessageRecipientOptions([]);
+      setMessageRecipientLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      setMessageRecipientLoading(true);
+
+      try {
+        const searchParams = new URLSearchParams({
+          query,
+          limit: "8"
+        });
+        const response = await fetch(`/api/bff/admin/users?${searchParams.toString()}`, {
+          signal: controller.signal
+        });
+        const data = (await response.json().catch(() => null)) as
+          | AdminUserLookupResponse
+          | { error?: string }
+          | null;
+
+        if (!response.ok) {
+          throw new Error(
+            data && "error" in data
+              ? data.error ?? "Falha ao buscar usuários."
+              : "Falha ao buscar usuários."
+          );
+        }
+
+        setMessageRecipientOptions((data as AdminUserLookupResponse).items);
+      } catch (searchError) {
+        const isAbortError =
+          searchError instanceof DOMException && searchError.name === "AbortError";
+        if (!isAbortError) {
+          setMessageRecipientOptions([]);
+          setMessageError(
+            searchError instanceof Error ? searchError.message : "Falha ao buscar usuários."
+          );
+        }
+      } finally {
+        setMessageRecipientLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [messageRecipientQuery, messageTargetMode]);
 
   const hasOpenActions = useMemo(
     () => activeStatus === ReportStatus.OPEN,
@@ -254,8 +333,232 @@ export function AdminModerationPanel() {
     }
   }
 
+  async function sendAdminNotification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessageError(null);
+    setMessageSuccess(null);
+
+    const normalizedTitle = messageTitle.trim();
+    const normalizedBody = messageBody.trim();
+
+    if (normalizedTitle.length < 2 || normalizedBody.length < 1) {
+      setMessageError("Preencha título e mensagem para enviar.");
+      return;
+    }
+
+    if (messageTargetMode === "single" && !messageRecipientUser) {
+      setMessageError("Selecione um destinatário da lista.");
+      return;
+    }
+
+    setMessageBusy(true);
+
+    try {
+      const response = await fetch("/api/bff/admin/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          recipientUserId: messageTargetMode === "single" ? messageRecipientUser?.id : undefined,
+          title: normalizedTitle,
+          body: normalizedBody
+        })
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | AdminSendMessageResponse
+        | { error?: string }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(
+          data && "error" in data
+            ? data.error ?? "Falha ao enviar notificação."
+            : "Falha ao enviar notificação."
+        );
+      }
+
+      const result = data as AdminSendMessageResponse;
+      setMessageSuccess(
+        result.recipientMode === "single"
+          ? "Notificação enviada para 1 usuário."
+          : `Notificação enviada para ${result.sentCount} usuários.`
+      );
+      setMessageTitle("");
+      setMessageBody("");
+      if (messageTargetMode === "single") {
+        setMessageRecipientQuery("");
+        setMessageRecipientUser(null);
+        setMessageRecipientOptions([]);
+      }
+    } catch (sendError) {
+      setMessageError(
+        sendError instanceof Error
+          ? sendError.message
+          : "Falha ao enviar notificação."
+      );
+    } finally {
+      setMessageBusy(false);
+    }
+  }
+
   return (
     <section className="space-y-6">
+      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold text-slate-900">Notificação para usuários</h2>
+          <p className="text-sm text-slate-600">
+            Envie um comunicado para todos os usuários ou para um usuário específico.
+          </p>
+        </div>
+
+        <form className="space-y-3" onSubmit={(event) => void sendAdminNotification(event)}>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMessageTargetMode("broadcast");
+                setMessageError(null);
+                setMessageSuccess(null);
+              }}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                messageTargetMode === "broadcast"
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-300 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Todos os usuários
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMessageTargetMode("single");
+                setMessageError(null);
+                setMessageSuccess(null);
+              }}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                messageTargetMode === "single"
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-300 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Usuário específico
+            </button>
+          </div>
+
+          {messageTargetMode === "single" ? (
+            <div className="space-y-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={messageRecipientQuery}
+                  onChange={(event) => {
+                    setMessageRecipientQuery(event.target.value);
+                    setMessageRecipientUser(null);
+                    setMessageError(null);
+                    setMessageSuccess(null);
+                  }}
+                  placeholder="Digite o nome do usuário"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+
+                {messageRecipientLoading ? (
+                  <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                    Buscando...
+                  </div>
+                ) : null}
+
+                {messageRecipientQuery.trim().length >= 2 &&
+                (!messageRecipientUser ||
+                  messageRecipientUser.name !== messageRecipientQuery.trim()) ? (
+                  <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+                    {messageRecipientOptions.length > 0 ? (
+                      <ul className="max-h-60 overflow-y-auto py-1">
+                        {messageRecipientOptions.map((option) => (
+                          <li key={option.id}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMessageRecipientUser(option);
+                                setMessageRecipientQuery(option.name);
+                                setMessageRecipientOptions([]);
+                                setMessageError(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                            >
+                              <span className="h-6 w-6 overflow-hidden rounded-full bg-slate-200">
+                                {option.avatarUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={option.avatarUrl}
+                                    alt={option.name}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : null}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate">{option.name}</span>
+                              <span className="text-xs text-slate-500">
+                                {option.id.slice(0, 8)}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : !messageRecipientLoading ? (
+                      <p className="px-3 py-2 text-sm text-slate-600">
+                        Nenhum usuário encontrado.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Digite pelo menos 2 letras e selecione um usuário na lista.
+              </p>
+
+              {messageRecipientUser ? (
+                <p className="text-xs text-emerald-700">
+                  Destinatário: {messageRecipientUser.name} ({messageRecipientUser.id})
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <input
+            type="text"
+            maxLength={120}
+            value={messageTitle}
+            onChange={(event) => setMessageTitle(event.target.value)}
+            placeholder="Título da notificação"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+
+          <textarea
+            maxLength={1200}
+            rows={4}
+            value={messageBody}
+            onChange={(event) => setMessageBody(event.target.value)}
+            placeholder="Mensagem para aparecer no sino"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+
+          {messageError ? <p className="text-sm text-red-600">{messageError}</p> : null}
+          {messageSuccess ? <p className="text-sm text-emerald-700">{messageSuccess}</p> : null}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={messageBusy}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+            >
+              {messageBusy ? "Enviando..." : "Enviar notificação"}
+            </button>
+          </div>
+        </form>
+      </section>
+
       <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-slate-900">Recursos de suspensão</h2>

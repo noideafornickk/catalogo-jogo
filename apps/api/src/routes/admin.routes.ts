@@ -5,7 +5,9 @@ import { requireAdmin } from "../middlewares/isAdmin";
 import {
   getAdminSuspensionAppealsController,
   getAdminReportsController,
+  getAdminUsersController,
   hideReviewAsAdminController,
+  postAdminMessageController,
   patchAdminSuspensionAppealController,
   patchAdminReportController,
   unhideReviewAsAdminController
@@ -21,3 +23,5 @@ adminRoutes.get("/appeals", getAdminSuspensionAppealsController);
 adminRoutes.patch("/appeals/:id", patchAdminSuspensionAppealController);
 adminRoutes.patch("/reviews/:id/hide", hideReviewAsAdminController);
 adminRoutes.patch("/reviews/:id/unhide", unhideReviewAsAdminController);
+adminRoutes.post("/messages", postAdminMessageController);
+adminRoutes.get("/users", getAdminUsersController);

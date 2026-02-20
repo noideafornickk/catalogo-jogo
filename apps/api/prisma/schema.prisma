@@ -18,6 +18,15 @@ enum NotificationType {
   REVIEW_LIKED
   REPORT_RESOLVED
   REVIEW_MODERATED
+  ADMIN_MESSAGE
+  FOLLOW_REQUEST
+  FOLLOW_ACCEPTED
+  FOLLOW_CREATED
+}
+
+enum FollowStatus {
+  PENDING
+  ACCEPTED
 }
 
 enum ReviewVisibilityStatus {
@@ -68,13 +77,17 @@ model User {
   issuedModerationStrikes ModerationStrike[] @relation("ModerationStrikesIssuedByAdmin")
   sentNotifications     Notification[] @relation("NotificationActor")
   receivedNotifications Notification[] @relation("NotificationRecipient")
+  followingRelations    Follow[]       @relation("FollowFollower")
+  followerRelations     Follow[]       @relation("FollowFollowing")
+  favoriteGames         UserFavoriteGame[]
 }
 
 model Profile {
-  id        String  @id @default(uuid())
-  userId    String  @unique
-  bio       String?
-  isPrivate Boolean @default(false)
+  id             String  @id @default(uuid())
+  userId         String  @unique
+  bio            String?
+  isPrivate      Boolean @default(false)
+  badgeVisibility String? @db.Text
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -88,6 +101,7 @@ model Game {
   descriptionText String?  @db.Text
 
   reviews Review[]
+  favoritedByUsers UserFavoriteGame[]
 }
 
 model Review {
@@ -153,18 +167,55 @@ model Notification {
   id              String           @id @default(uuid())
   recipientUserId String
   actorUserId     String
-  reviewId        String
+  reviewId        String?
+  followId        String?
+  title           String?
+  body            String?          @db.Text
   type            NotificationType
   readAt          DateTime?
   createdAt       DateTime         @default(now())
 
   recipientUser User   @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
   actor         User   @relation("NotificationActor", fields: [actorUserId], references: [id], onDelete: Cascade)
-  review        Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  review        Review? @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  follow        Follow? @relation(fields: [followId], references: [id], onDelete: Cascade)
 
   @@index([recipientUserId, createdAt])
   @@index([recipientUserId, readAt])
   @@index([reviewId])
+  @@index([followId])
+}
+
+model Follow {
+  id              String     @id @default(uuid())
+  followerUserId  String
+  followingUserId String
+  status          FollowStatus @default(PENDING)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  followerUser  User @relation("FollowFollower", fields: [followerUserId], references: [id], onDelete: Cascade)
+  followingUser User @relation("FollowFollowing", fields: [followingUserId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@unique([followerUserId, followingUserId])
+  @@index([followingUserId, status])
+  @@index([followerUserId, status])
+}
+
+model UserFavoriteGame {
+  id        String   @id @default(uuid())
+  userId    String
+  gameId    String
+  position  Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@unique([userId, position])
+  @@index([userId, position])
 }
 
 model ReviewReport {
