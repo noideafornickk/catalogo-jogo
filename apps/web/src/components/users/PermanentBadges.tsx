@@ -445,21 +445,28 @@ export function PermanentBadges({
 
             {mode === "owner" && activeBadge.unlocked ? (
               <div className="mt-3 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-xs font-medium text-slate-700">Exibir no perfil público</p>
+                <div className="space-y-0.5">
+                  <p className="text-xs font-medium text-slate-700">Exibir no perfil público</p>
+                  <p className="text-[11px] text-slate-500">
+                    {visibilityMap[activeBadge.id] ? "Visível no perfil público" : "Oculta no perfil público"}
+                  </p>
+                </div>
                 <button
                   type="button"
-                  role="switch"
-                  aria-checked={visibilityMap[activeBadge.id]}
+                  aria-pressed={visibilityMap[activeBadge.id]}
+                  title={
+                    visibilityMap[activeBadge.id]
+                      ? "Ocultar do perfil público"
+                      : "Exibir no perfil público"
+                  }
                   onClick={() => toggleVisibility(activeBadge.id)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 ${
-                    visibilityMap[activeBadge.id] ? "bg-slate-900" : "bg-slate-300"
+                  className={`rounded-md border px-3 py-1 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-slate-400 ${
+                    visibilityMap[activeBadge.id]
+                      ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                      : "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
                   }`}
                 >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                      visibilityMap[activeBadge.id] ? "translate-x-5" : "translate-x-0.5"
-                    }`}
-                  />
+                  {visibilityMap[activeBadge.id] ? "Ocultar" : "Exibir"}
                 </button>
               </div>
             ) : null}
